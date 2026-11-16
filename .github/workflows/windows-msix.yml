@@ -1,6 +1,8 @@
 name: FILE-O Meet Windows MSIX
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
 jobs:
   windows-msix:
     runs-on: windows-latest
