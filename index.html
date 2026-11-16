@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>FILE-O Meeting</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="renderer.js" defer></script>
+  <script src="workspace.js" defer></script>
+</head>
+<body>
+<div class="app-shell">
+  <aside class="app-sidebar">
+    <div class="app-identity">
+      <img src="assets/fileo.png" class="app-brand-icon" width="32" height="32" alt="">
+      <div><strong>файло<span>.</span></strong><small>MEETING</small></div>
+    </div>
+    <div class="nav-section-label">РАБОЧЕЕ ПРОСТРАНСТВО</div>
+    <nav class="primary-nav" aria-label="Разделы приложения">
+      <button type="button" class="nav-item active" id="navHome" data-view="home"><span class="nav-number">01</span>Главная</button>
+      <button type="button" class="nav-item" id="navMeetings" data-view="meetings"><span class="nav-number">02</span>Все встречи</button>
+      <button type="button" class="nav-item" id="navNew" data-view="record"><span class="nav-number">03</span>Новая запись</button>
+      <button type="button" class="nav-item" id="navDocuments" data-view="documents"><span class="nav-number">04</span>Документы</button>
+      <button type="button" class="nav-item" id="navSettings" data-view="settings"><span class="nav-number">05</span>Настройки</button>
+    </nav>
+    <div class="sidebar-bottom">
+      <div class="sync-panel">
+        <span class="sync-light" id="syncLight"></span>
+        <div><strong id="syncState">Подключение FILE-O</strong><small>Единый личный кабинет</small></div>
+      </div>
+      <div class="sidebar-person">
+        <div><strong id="sidebarEmail">Аккаунт не подключён</strong><small id="sidebarPlan">FILE-O Meeting</small></div>
+        <button type="button" id="openCabinet" class="sidebar-open">Кабинет ↗</button>
+      </div>
+    </div>
+  </aside>
+
+  <div class="app-body">
+    <header class="app-topbar">
+      <div class="breadcrumb"><span>FILE-O Meeting</span><span class="breadcrumb-separator">/</span><strong id="currentViewName">Главная</strong></div>
+      <div class="topbar-right"><span id="recordIndicator" class="record-badge" hidden>● ЗАПИСЬ ИДЁТ</span>
+        <button id="help" type="button" class="top-link">Справка ↗</button></div>
+    </header>
+
+    <main class="main-content">
+      <!-- Dashboard: account data, never invented counters or meetings -->
+      <section id="homePage" class="workspace-page">
+        <div class="page-label">FILE-O MEETING / РАБОЧЕЕ ПРОСТРАНСТВО</div>
+        <div class="page-intro dashboard-intro">
+          <div><h1>Встречи, к которым<br>хочется возвращаться.</h1>
+            <p>Записывайте разговоры, выделяйте главное и находите решения без ручных заметок.</p></div>
+          <button id="quickRecord" type="button" class="btn btn-primary">Новая запись <span aria-hidden="true">+</span></button>
+        </div>
+        <div class="home-statline" id="homeMetrics"><span>Встречи ещё не загружены</span></div>
+        <div class="section-title-row"><div><span class="micro-label">ИСТОРИЯ</span><h2>Последние встречи</h2></div>
+          <button id="homeAll" type="button" class="plain-action">Все встречи ↗</button></div>
+        <div id="homeRecent" class="history-table" aria-live="polite"><p class="empty-state">Подключите аккаунт, чтобы увидеть сохранённые встречи.</p></div>
+        <div class="home-footnote">Протоколы синхронизируются с вашим существующим аккаунтом FILE-O.</div>
+      </section>
+
+      <!-- Recording: preserves every functional identifier from v0.5 -->
+      <section id="recordPage" class="workspace-page" hidden>
+        <div class="page-label">НОВАЯ ЗАПИСЬ</div>
+        <div class="page-intro slim"><div><h1>Начните с разговора.</h1><p>Приложение сохранит текст и подготовит протокол встречи.</p></div></div>
+        <section class="account-panel" id="pairPanel">
+          <div class="section-title-row"><div><span class="micro-label">ПОДКЛЮЧЕНИЕ</span><h2>Подключите FILE-O</h2></div><span class="small-status">01 / 02</span></div>
+          <p class="field-hint">Получите одноразовый код в личном кабинете и введите его здесь. Пароль приложению не нужен.</p>
+          <label class="input-label" for="pairCode">Код подключения</label>
+          <div class="connect-controls">
+            <input id="pairCode" type="text" maxlength="10" autocomplete="off" spellcheck="false" placeholder="XXXXXXXXXX">
+            <button id="pair" class="btn btn-primary" type="button">Подключить</button>
+          </div>
+          <button type="button" id="getCode" class="plain-action">Получить код на FILE-O ↗</button>
+          <p id="pairNotice" class="inline-notice" role="status" aria-live="polite"></p>
+        </section>
+
+        <section id="meetingPanel" class="record-panel" hidden>
+          <div class="account-line"><span class="connect-dot"></span>
+            <div><strong id="accountEmail">Аккаунт FILE-O</strong><small id="accountPlan">Плюс навсегда</small></div>
+            <button id="disconnect" type="button" class="plain-action compact">Отключить</button>
+          </div>
+          <div class="record-setup" id="setupPanel">
+            <div class="section-title-row"><div><span class="micro-label">НАСТРОЙКА</span><h2>Новая встреча</h2></div><span class="small-status">02 / 02</span></div>
+            <div class="field-row">
+              <label class="input-label grow">Тема разговора
+                <input id="subject" type="text" maxlength="120" value="Рабочая встреча" placeholder="Например, обсуждение запуска проекта"></label>
+              <label class="input-label count">Участников
+                <input id="participants" type="number" min="1" max="100" step="1" placeholder="—"></label>
+            </div>
+            <div class="source-heading"><strong>Источники аудио</strong><span>Можно выбрать оба источника</span></div>
+            <div class="source-list">
+              <label for="systemSound" class="source-row">
+                <span class="source-radio"><input id="systemSound" type="checkbox" checked></span>
+                <span><strong>Звук компьютера</strong><small>Голоса из окна видеозвонка и других приложений</small></span>
+                <span class="source-type">СИСТЕМА</span>
+              </label>
+              <label for="microphone" class="source-row">
+                <span class="source-radio"><input id="microphone" type="checkbox" checked></span>
+                <span><strong>Мой микрофон</strong><small>Ваш голос во время разговора</small></span>
+                <span class="source-type">МИКРОФОН</span>
+              </label>
+            </div>
+            <p class="permission-note">Системный звук может включать уведомления других приложений. Видео не сохраняется. На Mac может потребоваться отдельное разрешение ОС.</p>
+            <label for="consent" class="consent-row"><input id="consent" type="checkbox">
+              <span>Все участники уведомлены о записи и необходимые разрешения получены.</span></label>
+            <div class="setup-actions">
+              <button id="start" type="button" class="btn btn-primary btn-large" disabled>Начать запись</button>
+              <span>Можно свернуть окно — запись продолжится в трее.</span>
+            </div>
+          </div>
+          <div id="livePanel" class="live-panel" hidden>
+            <div class="live-head"><div><span class="live-status">● ЗАПИСЬ</span>
+                <h2 id="liveTitle">Рабочая встреча</h2><p id="liveState">Идёт транскрибация…</p></div>
+              <strong id="clock" class="live-clock">00:00</strong></div>
+            <div class="live-controlbar">
+              <button id="highlight" class="btn btn-outline" type="button"><span id="highlightText">Выделить важный момент</span></button>
+              <button id="stop" class="btn btn-danger" type="button">Завершить запись</button>
+            </div>
+            <div id="highlightNotice" class="highlight-note" hidden></div>
+            <div class="live-columns">
+              <div class="live-transcript-col">
+                <div class="live-column-title"><strong>Транскрибация</strong><span id="fragmentCount">Ожидаем первые фрагменты</span></div>
+                <div id="transcript" class="transcript" aria-live="polite"><p class="empty-state">Речь появится здесь после обработки первого звукового фрагмента.</p></div>
+              </div>
+              <div class="live-insights">
+                <div class="live-column-title"><strong>Аудиосигнал</strong><span>РЕАЛЬНЫЙ УРОВЕНЬ</span></div>
+                <div class="signal-panel">
+                  <div class="meter"><span>Компьютер</span><div class="meter-track"><div id="systemLevel" class="meter-fill"></div></div></div>
+                  <div class="meter"><span>Микрофон</span><div class="meter-track"><div id="microphoneLevel" class="meter-fill"></div></div></div>
+                  <div class="wave-bars" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+                </div>
+                <p class="insights-help">Решения и поручения появятся после завершения записи и обработки разговора.</p>
+              </div>
+            </div>
+          </div>
+          <div id="processingPanel" class="processing-panel" hidden>
+            <span class="micro-label">ОБРАБОТКА ВСТРЕЧИ</span>
+            <h2 id="processingTitle">Подготавливаем протокол</h2>
+            <p id="processingText">Фрагменты отправлены. Результаты скоро появятся в кабинете.</p>
+            <div class="processing-steps"><div><strong id="processedCount">0</strong><span>обработано</span></div>
+              <div><strong id="receivedCount">0</strong><span>получено</span></div></div>
+            <div class="processing-actions">
+              <button id="viewReport" class="btn btn-primary" type="button" hidden>Открыть готовый протокол</button>
+              <button id="newMeeting" class="btn btn-outline" type="button" hidden>Новая запись</button>
+            </div>
+          </div>
+        </section>
+      </section>
+
+      <section id="meetingsPage" class="workspace-page" hidden>
+        <div class="page-label">ИСТОРИЯ ВСТРЕЧ</div>
+        <div class="page-intro slim"><div><h1>Все встречи.</h1><p>Найдите нужный разговор и откройте сохранённый протокол.</p></div>
+          <button id="meetingsNew" class="btn btn-primary" type="button">Новая запись</button></div>
+        <label class="input-label search-field">Поиск по названию
+          <input id="meetingsSearch" type="search" placeholder="Например, план запуска"></label>
+        <div id="meetingsBody" class="history-table" aria-live="polite"><p class="empty-state">Загружаем встречи…</p></div>
+        <p id="meetingsStatus" class="inline-notice" role="status" aria-live="polite"></p>
+      </section>
+
+      <section id="documentsPage" class="workspace-page" hidden>
+        <div class="page-label">ГОТОВЫЕ ДОКУМЕНТЫ</div>
+        <div class="page-intro slim"><div><h1>Протоколы и конспекты.</h1><p>Документы хранятся в едином кабинете FILE-O и доступны для скачивания.</p></div>
+          <button id="documentsCabinet" type="button" class="btn btn-outline">Экспорт в кабинете ↗</button></div>
+        <div id="documentsBody" class="history-table" aria-live="polite"></div>
+      </section>
+
+      <section id="documentPage" class="workspace-page" hidden>
+        <div class="document-top"><button id="documentBack" type="button" class="plain-action">← К списку встреч</button>
+          <span class="document-demo-label" id="detailDemoLabel" hidden>ДЕМОНСТРАЦИОННЫЕ ДАННЫЕ</span></div>
+        <div class="document-heading">
+          <div><span class="page-label">ПРОТОКОЛ ВСТРЕЧИ</span>
+            <h1 id="documentTitle">Название встречи</h1><p id="documentMeta"></p></div>
+          <div class="document-actions">
+            <button id="documentEdit" class="btn btn-outline" type="button">Редактировать</button>
+            <button id="documentSave" class="btn btn-primary" type="button" hidden>Сохранить</button>
+            <button id="documentToCabinet" class="btn btn-outline" type="button">Скачать в кабинете ↗</button>
+          </div>
+        </div>
+        <p id="documentStatus" class="inline-notice" role="status" aria-live="polite"></p>
+        <div id="documentEditMeta" class="edit-meta" hidden>
+          <label class="input-label">Название встречи<input id="documentTitleInput" maxlength="120"></label>
+          <label class="input-label">Количество участников<input id="documentCountInput" type="number" min="1" max="100"></label>
+        </div>
+        <div class="document-columns">
+          <div class="document-transcript">
+            <div class="document-pane-header"><strong>Расшифровка с таймкодами</strong>
+              <span id="documentSegmentCount">—</span></div>
+            <label class="transcript-search" for="documentTranscriptSearch">
+              <span>ПОИСК ПО ЗАГРУЖЕННЫМ ФРАГМЕНТАМ</span>
+              <input id="documentTranscriptSearch" type="search" maxlength="120"
+                placeholder="Найти слово или фразу…" autocomplete="off">
+            </label>
+            <div id="detailTranscript" class="segment-list"></div>
+            <button id="moreSegments" type="button" class="plain-action more-button" hidden>Показать ещё фрагменты</button>
+            <label id="detailEditTextLabel" class="input-label transcript-edit" hidden>Оформленный текст
+              <textarea id="detailFormattedEditor" rows="11"></textarea></label>
+          </div>
+          <aside class="document-summary">
+            <div class="document-pane-header"><strong>Итоги встречи</strong><span>FILE-O</span></div>
+            <section><span class="document-index">01 / РЕЗЮМЕ</span>
+              <p id="detailBrief">—</p></section>
+            <section><span class="document-index">02 / РЕШЕНИЯ</span>
+              <ul id="detailDecisions"></ul>
+              <label id="detailDecisionsEditLabel" class="input-label" hidden>Решения, по одному на строку
+                <textarea id="detailDecisionsEditor" rows="5"></textarea></label>
+            </section>
+            <section><span class="document-index">03 / СЛЕДУЮЩИЕ ШАГИ</span>
+              <ul id="detailTasks"></ul>
+              <label id="detailTasksEditLabel" class="input-label" hidden>Задачи, по одной на строку
+                <textarea id="detailTasksEditor" rows="5"></textarea></label>
+            </section>
+            <section id="detailHighlightsSection" hidden><span class="document-index">04 / ВАЖНЫЕ МОМЕНТЫ</span>
+              <ul id="detailHighlights"></ul></section>
+          </aside>
+        </div>
+        <div class="document-footnote">Имена говорящих автоматически не определяются. Исходные временные метки не изменяются при редактировании текста; аудиофайл не хранится для повторного прослушивания.</div>
+      </section>
+
+      <section id="settingsPage" class="workspace-page" hidden>
+        <div class="page-label">АККАУНТ И НАСТРОЙКИ</div>
+        <div class="page-intro slim"><div><h1>Ваш FILE-O.</h1><p>Единый аккаунт для приложения, истории встреч и готовых документов.</p></div></div>
+        <div class="settings-list">
+          <div><strong>Аккаунт</strong><span id="settingsEmail">Не подключён</span></div>
+          <div><strong>Доступ к FILE-O Meeting</strong><span id="settingsPlan">—</span></div>
+          <div><strong>Личное хранение</strong><span>Документы — в закрытом кабинете FILE-O до вашего удаления.</span></div>
+          <div><strong>Запись аудио</strong><span>Только по вашему нажатию с необходимыми разрешениями.</span></div>
+        </div>
+        <div class="settings-actions"><button id="settingsCabinet" class="btn btn-outline">Открыть кабинет ↗</button>
+          <button id="openLibrary" class="btn btn-outline">Документы в FILE-O ↗</button>
+          <button id="openPricing" class="btn btn-outline">Тарифы ↗</button>
+          <button id="help" class="btn btn-outline">Справка ↗</button>
+          <button id="settingsDisconnect" class="btn btn-outline">Отключить аккаунт</button></div>
+      </section>
+      <p id="status" class="global-status" aria-live="polite" role="status"></p>
+    </main>
+    <footer class="app-footer"><span>FILE-O Meeting · 0.6.1</span>
+      <span id="connectionState"><span></span> Готово к работе</span>
+      <span>Windows / macOS · тестовая версия</span></footer>
+  </div>
+</div>
+</body>
+</html>

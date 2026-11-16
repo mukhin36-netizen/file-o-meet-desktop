@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+         xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+         xmlns:uap10="http://schemas.microsoft.com/appx/manifest/uap/windows10/10"
+         xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+         IgnorableNamespaces="uap uap10 rescap">
+  <Identity Name="MR.FIXDEV.FILE-OMEET"
+            Publisher="CN=D27AA549-E324-46BF-AD21-D92FD054E9E8"
+            Version="0.6.1.0"
+            ProcessorArchitecture="x64" />
+  <Properties>
+    <DisplayName>FILE-O Meet</DisplayName>
+    <PublisherDisplayName>MR.FIX DEV</PublisherDisplayName>
+    <Description>FILE-O Meet desktop meeting recorder and transcription companion</Description>
+    <Logo>StoreAssets\StoreLogo.png</Logo>
+  </Properties>
+  <Resources>
+    <Resource Language="en-us"/>
+    <Resource Language="ru-ru"/>
+  </Resources>
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.19041.0" MaxVersionTested="10.0.26100.0"/>
+  </Dependencies>
+  <Capabilities>
+    <rescap:Capability Name="runFullTrust"/>
+    <DeviceCapability Name="microphone"/>
+  </Capabilities>
+  <Applications>
+    <Application Id="FILEOMeet" Executable="FILE-O-Meeting.exe"
+                 EntryPoint="Windows.FullTrustApplication"
+                 uap10:RuntimeBehavior="packagedClassicApp"
+                 uap10:TrustLevel="mediumIL">
+      <uap:VisualElements DisplayName="FILE-O Meet"
+                          Description="FILE-O Meet meeting recording and transcription"
+                          BackgroundColor="transparent"
+                          Square150x150Logo="StoreAssets\Square150x150Logo.png"
+                          Square44x44Logo="StoreAssets\Square44x44Logo.png">
+        <uap:DefaultTile Wide310x150Logo="StoreAssets\Wide310x150Logo.png"
+                         Square310x310Logo="StoreAssets\Square310x310Logo.png"/>
+      </uap:VisualElements>
+    </Application>
+  </Applications>
+</Package>

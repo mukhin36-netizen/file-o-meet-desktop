@@ -1,0 +1,46 @@
+name: FILE-O Meet Windows MSIX
+on:
+  workflow_dispatch:
+jobs:
+  windows-msix:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Unit tests
+        run: npm test
+      - name: Build Windows Electron x64
+        shell: pwsh
+        run: |
+          npx electron-packager . FILE-O-Meeting --platform=win32 --arch=x64 --out=dist --overwrite --icon=assets/fileo.ico --asar --prune=true --ignore='^/dist' --ignore='^/tests' --ignore='^/store-assets' --ignore='^/\\.github'
+          if ($LASTEXITCODE -ne 0) { throw 'electron-packager failed' }
+      - name: Assemble unsigned MSIX with Windows SDK MakeAppx
+        shell: pwsh
+        run: |
+          $app = (Resolve-Path 'dist/FILE-O-Meeting-win32-x64').Path
+          Copy-Item 'Package.appxmanifest' (Join-Path $app 'AppxManifest.xml')
+          Copy-Item 'store-assets' (Join-Path $app 'StoreAssets') -Recurse
+          $sdk = Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\bin' -Directory |
+            Sort-Object Name -Descending |
+            ForEach-Object { Join-Path $_.FullName 'x64\makeappx.exe' } |
+            Where-Object { Test-Path $_ } |
+            Select-Object -First 1
+          if (-not $sdk) { throw 'Windows SDK makeappx.exe not found' }
+          New-Item -ItemType Directory -Force 'store-output' | Out-Null
+          $output = (Join-Path (Resolve-Path 'store-output').Path 'FILE-O-Meet_0.6.1.0_x64.msix')
+          & $sdk pack /v /o /d $app /p $output
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path $output)) { throw 'MSIX package creation failed' }
+          Write-Host "Created $output"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FILE-O-Meet-0.6.1.0-unsigned-MSIX
+          path: store-output/*.msix
+          if-no-files-found: error
+          retention-days: 30
