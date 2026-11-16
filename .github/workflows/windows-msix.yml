@@ -9,8 +9,8 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: '22'
           cache: npm
@@ -40,7 +40,7 @@ jobs:
           & $sdk pack /v /o /d $app /p $output
           if ($LASTEXITCODE -ne 0 -or -not (Test-Path $output)) { throw 'MSIX package creation failed' }
           Write-Host "Created $output"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: FILE-O-Meet-0.6.1.0-unsigned-MSIX
           path: store-output/*.msix
