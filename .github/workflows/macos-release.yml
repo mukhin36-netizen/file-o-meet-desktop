@@ -1,0 +1,141 @@
+name: FILE-O Meeting macOS QA and notarized release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'package.json'
+      - 'package-lock.json'
+      - 'pack-mac.cjs'
+      - 'main.cjs'
+      - 'preload.cjs'
+      - 'renderer.js'
+      - 'assets/**'
+      - '.github/workflows/macos-release.yml'
+  workflow_dispatch:
+    inputs:
+      signed_release:
+        description: 'Sign with Developer ID and notarize with Apple (requires repository secrets)'
+        type: boolean
+        required: true
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  build-macos:
+    name: macOS native package validation
+    runs-on: macos-15
+    timeout-minutes: 90
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Test meeting features
+        run: npm test
+
+      - name: Import Developer ID certificate for signed release
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.signed_release }}
+        shell: bash
+        env:
+          FILEO_MAC_CERT_P12_BASE64: ${{ secrets.FILEO_MAC_CERT_P12_BASE64 }}
+          FILEO_MAC_CERT_PASSWORD: ${{ secrets.FILEO_MAC_CERT_PASSWORD }}
+          FILEO_APPLE_SIGN_IDENTITY: ${{ secrets.FILEO_APPLE_SIGN_IDENTITY }}
+          FILEO_APPLE_TEAM_ID: ${{ secrets.FILEO_APPLE_TEAM_ID }}
+          FILEO_APPLE_ID: ${{ secrets.FILEO_APPLE_ID }}
+          FILEO_APPLE_APP_PASSWORD: ${{ secrets.FILEO_APPLE_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for key in FILEO_MAC_CERT_P12_BASE64 FILEO_MAC_CERT_PASSWORD FILEO_APPLE_SIGN_IDENTITY FILEO_APPLE_TEAM_ID FILEO_APPLE_ID FILEO_APPLE_APP_PASSWORD; do
+            if [ -z "$(printenv "$key" || true)" ]; then
+              echo "::error::Missing Apple signing/notarization secret: $key"
+              exit 1
+            fi
+          done
+          CERT="$RUNNER_TEMP/fileo-developer-id.p12"
+          KEYCHAIN="$RUNNER_TEMP/fileo-ci.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -hex 24)"
+          printf '%s' "$FILEO_MAC_CERT_P12_BASE64" | base64 -D > "$CERT"
+          chmod 600 "$CERT"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 7200 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security import "$CERT" -k "$KEYCHAIN" -P "$FILEO_MAC_CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security list-keychains -d user -s "$KEYCHAIN"
+          echo "FILEO_MAC_KEYCHAIN=$KEYCHAIN" >> "$GITHUB_ENV"
+          rm -f "$CERT"
+
+      - name: Package Apple Silicon
+        env:
+          FILEO_MAC_DISTRIBUTE: ${{ github.event_name == 'workflow_dispatch' && inputs.signed_release && '1' || '0' }}
+          FILEO_APPLE_SIGN_IDENTITY: ${{ secrets.FILEO_APPLE_SIGN_IDENTITY }}
+          FILEO_APPLE_TEAM_ID: ${{ secrets.FILEO_APPLE_TEAM_ID }}
+          FILEO_APPLE_ID: ${{ secrets.FILEO_APPLE_ID }}
+          FILEO_APPLE_APP_PASSWORD: ${{ secrets.FILEO_APPLE_APP_PASSWORD }}
+        run: npm run pack:mac-arm
+
+      - name: Package Intel
+        env:
+          FILEO_MAC_DISTRIBUTE: ${{ github.event_name == 'workflow_dispatch' && inputs.signed_release && '1' || '0' }}
+          FILEO_APPLE_SIGN_IDENTITY: ${{ secrets.FILEO_APPLE_SIGN_IDENTITY }}
+          FILEO_APPLE_TEAM_ID: ${{ secrets.FILEO_APPLE_TEAM_ID }}
+          FILEO_APPLE_ID: ${{ secrets.FILEO_APPLE_ID }}
+          FILEO_APPLE_APP_PASSWORD: ${{ secrets.FILEO_APPLE_APP_PASSWORD }}
+        run: npm run pack:mac-intel
+
+      - name: Verify both native app bundles
+        shell: bash
+        run: |
+          set -euo pipefail
+          for arch in arm64 x64; do
+            APP="dist/FILE-O-Meeting-darwin-$arch/FILE-O-Meeting.app"
+            test -d "$APP"
+            PLIST="$APP/Contents/Info.plist"
+            test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$PLIST")" = 'com.fileo.meeting'
+            test "$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' "$PLIST")" = '14.2'
+            /usr/libexec/PlistBuddy -c 'Print :NSMicrophoneUsageDescription' "$PLIST" > /dev/null
+            /usr/libexec/PlistBuddy -c 'Print :NSAudioCaptureUsageDescription' "$PLIST" > /dev/null
+            test -x "$APP/Contents/MacOS/FILE-O-Meeting"
+            file "$APP/Contents/MacOS/FILE-O-Meeting"
+            if [ '${{ github.event_name }}' = 'workflow_dispatch' ] && [ '${{ inputs.signed_release }}' = 'true' ]; then
+              codesign --verify --deep --strict --verbose=2 "$APP"
+              if ! xcrun stapler validate "$APP"; then
+                xcrun stapler staple "$APP"
+                xcrun stapler validate "$APP"
+              fi
+              spctl --assess --type execute --verbose=2 "$APP"
+            else
+              echo "::warning::Unsigned QA build only; this artifact is NOT a public macOS installer."
+            fi
+          done
+
+      - name: Create native macOS archives preserving metadata and symlinks
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          for arch in arm64 x64; do
+            if [ "$arch" = 'arm64' ]; then label=AppleSilicon; else label=Intel; fi
+            ditto -c -k --sequesterRsrc --keepParent "dist/FILE-O-Meeting-darwin-$arch/FILE-O-Meeting.app" "release/FILE-O-Meeting-macOS-$label.zip"
+            unzip -t "release/FILE-O-Meeting-macOS-$label.zip" | tail -1
+          done
+          shasum -a 256 release/*.zip > release/SHA256.txt
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: FILE-O-Meeting-macOS-${{ github.event_name == 'workflow_dispatch' && inputs.signed_release && 'SIGNED-NOTARIZED' || 'UNSIGNED-QA' }}
+          path: release/
+          if-no-files-found: error
+          retention-days: 14
