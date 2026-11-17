@@ -4,9 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'">
-  <title>FILE-O Meeting</title>
+  <title>FILE-O Meet — встречи и транскрипция</title>
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="meet_theme.css">
   <script src="renderer.js" defer></script>
+  <script src="meet_ui.js" defer></script>
   <script src="workspace.js" defer></script>
 </head>
 <body>
@@ -14,7 +16,7 @@
   <aside class="app-sidebar">
     <div class="app-identity">
       <img src="assets/fileo.png" class="app-brand-icon" width="32" height="32" alt="">
-      <div><strong>файло<span>.</span></strong><small>MEETING</small></div>
+      <div><strong>FILE-O<span> Meet</span></strong><small>ЗАПИСЬ И ПРОТОКОЛЫ ВСТРЕЧ</small></div>
     </div>
     <div class="nav-section-label">РАБОЧЕЕ ПРОСТРАНСТВО</div>
     <nav class="primary-nav" aria-label="Разделы приложения">
@@ -24,6 +26,22 @@
       <button type="button" class="nav-item" id="navDocuments" data-view="documents"><span class="nav-number">04</span>Документы</button>
       <button type="button" class="nav-item" id="navSettings" data-view="settings"><span class="nav-number">05</span>Настройки</button>
     </nav>
+    <nav id="meetingSubnav" class="meeting-subnav" aria-label="Разделы открытой встречи" hidden>
+      <span class="nav-section-label">ОТКРЫТАЯ ВСТРЕЧА</span>
+      <button type="button" data-meet-jump="documentSummaryPanel" class="meet-nav-item">Сводка</button>
+      <button type="button" data-meet-jump="detailDecisionsSection" class="meet-nav-item">Решения и действия</button>
+      <button type="button" data-meet-jump="detailTopicsSection" class="meet-nav-item">Контекст</button>
+      <button type="button" data-meet-jump="documentTranscriptPanel" class="meet-nav-item selected">Транскрипция</button>
+      <button type="button" id="meetingNavBack" class="meet-nav-back">← Все встречи</button>
+    </nav>
+    <section class="sidebar-recorder" aria-label="Управление записью">
+      <div class="sidebar-rec-head"><strong>Запись встречи</strong><span id="sidebarRecDot" class="sidebar-rec-dot"></span></div>
+      <div class="sidebar-rec-wave" aria-hidden="true">
+        <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+      </div>
+      <button type="button" id="sidebarRecordButton" class="sidebar-record-btn">Начать запись</button>
+      <small id="sidebarRecordStatus">Запись не идёт</small>
+    </section>
     <div class="sidebar-bottom">
       <div class="sync-panel">
         <span class="sync-light" id="syncLight"></span>
@@ -38,8 +56,13 @@
 
   <div class="app-body">
     <header class="app-topbar">
-      <div class="breadcrumb"><span>FILE-O Meeting</span><span class="breadcrumb-separator">/</span><strong id="currentViewName">Главная</strong></div>
-      <div class="topbar-right"><span id="recordIndicator" class="record-badge" hidden>● ЗАПИСЬ ИДЁТ</span>
+      <div class="breadcrumb"><span>FILE-O Meet</span><span class="breadcrumb-separator">/</span><strong id="currentViewName">Главная</strong></div>
+      <div class="topbar-right">
+        <div id="topMeetActions" class="top-meet-actions" hidden>
+          <button type="button" id="topMeetCopy" class="top-meet-action">Копировать текст</button>
+          <button type="button" id="topMeetExport" class="top-meet-export">Экспорт</button>
+        </div>
+        <span id="recordIndicator" class="record-badge" hidden>● ЗАПИСЬ ИДЁТ</span>
         <button id="help" type="button" class="top-link">Справка ↗</button></div>
     </header>
 
@@ -174,17 +197,29 @@
           <div class="document-actions">
             <button id="documentEdit" class="btn btn-outline" type="button">Редактировать</button>
             <button id="documentSave" class="btn btn-primary" type="button" hidden>Сохранить</button>
-            <button id="documentToCabinet" class="btn btn-outline" type="button">Скачать в кабинете ↗</button>
+            <button id="documentToCabinet" class="btn btn-outline" type="button">Документы в кабинете</button>
           </div>
         </div>
+        <div class="meet-kpi-grid" id="meetingKpis" aria-label="Показатели встречи">
+          <div class="meet-kpi"><span>Длительность</span><strong id="metricDuration">—</strong></div>
+          <div class="meet-kpi"><span>Слов в расшифровке</span><strong id="metricWords">—</strong></div>
+          <div class="meet-kpi"><span>Фрагментов</span><strong id="metricFragments">—</strong></div>
+          <div class="meet-kpi"><span>Участников</span><strong id="metricParticipants">—</strong></div>
+        </div>
+        <div class="meet-identity-banner" id="meetingSpeakerBanner">
+          <span>Участники</span>
+          <p id="meetingSpeakerNote">Имена говорящих не определяются автоматически. Сводка основана на тексте встречи.</p>
+          <button type="button" id="meetingSpeakerEdit" class="meet-small-action">Изменить данные</button>
+        </div>
+        <div class="meeting-topic-strip" id="meetingTopicStrip" aria-label="Важные моменты встречи"></div>
         <p id="documentStatus" class="inline-notice" role="status" aria-live="polite"></p>
         <div id="documentEditMeta" class="edit-meta" hidden>
           <label class="input-label">Название встречи<input id="documentTitleInput" maxlength="120"></label>
           <label class="input-label">Количество участников<input id="documentCountInput" type="number" min="1" max="100"></label>
         </div>
         <div class="document-columns">
-          <div class="document-transcript">
-            <div class="document-pane-header"><strong>Расшифровка с таймкодами</strong>
+          <div class="document-transcript" id="documentTranscriptPanel">
+            <div class="document-pane-header"><strong>Транскрипция</strong>
               <span id="documentSegmentCount">—</span></div>
             <label class="transcript-search" for="documentTranscriptSearch">
               <span>ПОИСК ПО ЗАГРУЖЕННЫМ ФРАГМЕНТАМ</span>
@@ -196,20 +231,26 @@
             <label id="detailEditTextLabel" class="input-label transcript-edit" hidden>Оформленный текст
               <textarea id="detailFormattedEditor" rows="11"></textarea></label>
           </div>
-          <aside class="document-summary">
-            <div class="document-pane-header"><strong>Итоги встречи</strong><span>FILE-O</span></div>
+          <aside class="document-summary" id="documentSummaryPanel">
+            <div class="document-pane-header"><strong>Сводка встречи</strong><span>FILE-O Meet</span></div>
             <section><span class="document-index">01 / РЕЗЮМЕ</span>
               <p id="detailBrief">—</p></section>
-            <section><span class="document-index">02 / РЕШЕНИЯ</span>
+            <section id="detailDecisionsSection"><span class="document-index">02 / КЛЮЧЕВЫЕ РЕШЕНИЯ</span>
               <ul id="detailDecisions"></ul>
               <label id="detailDecisionsEditLabel" class="input-label" hidden>Решения, по одному на строку
                 <textarea id="detailDecisionsEditor" rows="5"></textarea></label>
             </section>
-            <section><span class="document-index">03 / СЛЕДУЮЩИЕ ШАГИ</span>
+            <section id="detailTasksSection"><span class="document-index">03 / ДЕЙСТВИЯ И ПОРУЧЕНИЯ</span>
               <ul id="detailTasks"></ul>
               <label id="detailTasksEditLabel" class="input-label" hidden>Задачи, по одной на строку
                 <textarea id="detailTasksEditor" rows="5"></textarea></label>
             </section>
+            <section id="detailTopicsSection"><span class="document-index">04 / КЛЮЧЕВЫЕ ТЕМЫ</span>
+              <ul id="detailTopics"></ul></section>
+            <section id="detailKeywordsSection"><span class="document-index">05 / ТЕМЫ И КЛЮЧЕВЫЕ СЛОВА</span>
+              <div class="meet-keyword-chips" id="detailKeywordChips"></div></section>
+            <section id="detailRisksSection"><span class="document-index">06 / РИСКИ</span>
+              <ul id="detailRisks"></ul></section>
             <section id="detailHighlightsSection" hidden><span class="document-index">04 / ВАЖНЫЕ МОМЕНТЫ</span>
               <ul id="detailHighlights"></ul></section>
           </aside>
@@ -234,7 +275,7 @@
       </section>
       <p id="status" class="global-status" aria-live="polite" role="status"></p>
     </main>
-    <footer class="app-footer"><span>FILE-O Meeting · 0.6.1</span>
+    <footer class="app-footer"><span>FILE-O Meet · 0.6.2</span>
       <span id="connectionState"><span></span> Готово к работе</span>
       <span>Windows / macOS · тестовая версия</span></footer>
   </div>

@@ -55,7 +55,8 @@
       if(selected)item.setAttribute('aria-current','page');
       else item.removeAttribute('aria-current');
     });
-    setText('currentViewName',labels[page]||'Meeting');
+    setText('currentViewName',labels[page]||'Meet');
+    window.FILEOMeetUI?.show(page);
     if(page==='home'||page==='meetings'||page==='documents')refresh();
     if(page==='record'){
       byId('subject')?.focus({preventScroll:true});
@@ -223,6 +224,7 @@
     byId('detailDecisionsEditor').value=(detail.sections?.decided||[]).join('\n');
     byId('detailTasksEditor').value=(detail.sections?.next_steps||[]).join('\n');
     setEditMode(false);
+    window.FILEOMeetUI?.renderDetail(detail,segments);
   }
   function setEditMode(value){
     editing=Boolean(value);
@@ -247,6 +249,7 @@
       renderDetail();
     }catch(error){
       detail=null;
+      window.FILEOMeetUI?.renderDetail(null,[]);
       setText('documentTitle','Не удалось открыть встречу');
       setStatus(error.message||'Документ недоступен.',true,'documentStatus');
     }
@@ -261,6 +264,7 @@
       detail.segment_has_more=Boolean(next.segment_has_more);
       detail.segment_total=next.segment_total;
       renderSegments(parts,true);
+      window.FILEOMeetUI?.renderDetail(detail,segments);
     }catch(error){
       setStatus(error.message||'Не удалось загрузить следующие фразы.',true,'documentStatus');
     }finally{button.disabled=false;}

@@ -36,13 +36,13 @@ jobs:
             Select-Object -First 1
           if (-not $sdk) { throw 'Windows SDK makeappx.exe not found' }
           New-Item -ItemType Directory -Force 'store-output' | Out-Null
-          $output = (Join-Path (Resolve-Path 'store-output').Path 'FILE-O-Meet_0.6.1.0_x64.msix')
+          $output = (Join-Path (Resolve-Path 'store-output').Path 'FILE-O-Meet_0.6.2.0_x64.msix')
           & $sdk pack /v /o /d $app /p $output
           if ($LASTEXITCODE -ne 0 -or -not (Test-Path $output)) { throw 'MSIX package creation failed' }
           Write-Host "Created $output"
       - uses: actions/upload-artifact@v6
         with:
-          name: FILE-O-Meet-0.6.1.0-unsigned-MSIX
+          name: FILE-O-Meet-0.6.2.0-unsigned-MSIX
           path: store-output/*.msix
           if-no-files-found: error
           retention-days: 30

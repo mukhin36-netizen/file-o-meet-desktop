@@ -6,7 +6,7 @@
  */
 const {
   app, BrowserWindow, ipcMain, shell, session, desktopCapturer,
-  safeStorage, nativeImage, Tray, Menu, Notification,
+  safeStorage, nativeImage, Tray, Menu, Notification, clipboard, screen,
   powerSaveBlocker, systemPreferences, net, dialog
 } = require('electron');
 const fs = require('node:fs');
@@ -14,7 +14,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 
 const HOST = 'https://file-o.com';
-const VERSION = '0.4.0';
+const VERSION = '0.6.2';
 const CHUNK_MAX = 6 * 1024 * 1024;
 const MAX_CAPTURE_MS = 12 * 3600 * 1000;
 const API_TIMEOUT_MS = 30000;
@@ -502,9 +502,12 @@ function requestQuit() {
   app.quit();
 }
 function makeWindow() {
+  const workArea=screen.getPrimaryDisplay().workAreaSize;
   window = new BrowserWindow({
-    width: 1040, height: 780, minWidth: 770, minHeight: 580,
-    title: 'FILE-O Meeting', backgroundColor: '#f7f5fb',
+    width: Math.min(1530, Math.max(940, workArea.width-65)),
+    height: Math.min(940, Math.max(650, workArea.height-65)),
+    minWidth: 900, minHeight: 600,
+    title: 'FILE-O Meet', backgroundColor: '#0c1120',
     autoHideMenuBar: true, show: false,
     icon: path.join(__dirname, 'assets', 'fileo.png'),
     webPreferences: {
@@ -580,6 +583,15 @@ function setupIPC() {
   ipcMain.handle('meeting:stop', () => requestStop());
   ipcMain.handle('meeting:highlight', () => highlight());
   ipcMain.handle('meeting:open', (_event, url) => openExternal(String(url || '')));
+  // Clipboard writes are explicit, bounded and local. Do not log/store
+  // transcript content and do not expose general filesystem operations.
+  ipcMain.handle('meeting:copy-text', (_event, text) => {
+    if (typeof text !== 'string' || text.length > 180000) {
+      throw Error('Недопустимый объём текста для копирования.');
+    }
+    clipboard.writeText(text);
+    return { ok: true };
+  });
   ipcMain.handle('meeting:get-state', () => ({ ...lastInfo, session: queueState ?
     { id: queueState.meetingId, started: queueState.started, finishRequested: queueState.finishRequested } : null }));
   ipcMain.handle('meeting:permission-microphone', async () => {

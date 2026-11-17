@@ -19,6 +19,7 @@ contextBridge.exposeInMainWorld('fileo', Object.freeze({
   highlight: () => invoke('highlight'),
   getState: () => invoke('get-state'),
   open: (url) => invoke('open', url),
+  copyText: (text) => invoke('copy-text', text),
   microphonePermission: () => invoke('permission-microphone'),
   onUpdate: (handler) => {
     if (typeof handler !== 'function') return () => {};
