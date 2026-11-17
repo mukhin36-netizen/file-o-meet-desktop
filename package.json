@@ -11,8 +11,8 @@
     "start": "electron .",
     "test": "node --test tests/*.test.cjs",
     "pack:windows": "electron-packager . FILE-O-Meeting --platform=win32 --arch=x64 --out=dist --overwrite --icon=assets/fileo.ico",
-    "pack:mac-arm": "electron-packager . FILE-O-Meeting --platform=darwin --arch=arm64 --out=dist --overwrite --icon=assets/fileo.icns",
-    "pack:mac-intel": "electron-packager . FILE-O-Meeting --platform=darwin --arch=x64 --out=dist --overwrite --icon=assets/fileo.icns"
+    "pack:mac-arm": "node pack-mac.cjs arm64",
+    "pack:mac-intel": "node pack-mac.cjs x64"
   },
   "devDependencies": {
     "@electron/packager": "20.3.0",
