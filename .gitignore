@@ -7,3 +7,11 @@ dist/
 *.key
 store-output/
 .DS_Store
+
+release/
+coverage/
+test-artifacts/
+*.p12
+*.pfx
+*.keystore
+.env.local

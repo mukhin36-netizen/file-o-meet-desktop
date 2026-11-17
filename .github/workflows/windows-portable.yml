@@ -1,0 +1,45 @@
+name: FILE-O Meet Windows portable (unsigned)
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Test
+        run: npm test
+      - name: Package Windows x64
+        shell: pwsh
+        run: |
+          npx electron-packager . FILE-O-Meeting --platform=win32 --arch=x64 --out=dist --overwrite --icon=assets/fileo.ico --asar --prune=true --ignore='^/dist' --ignore='^/tests'
+          if ($LASTEXITCODE -ne 0) { throw 'Electron Windows package failed' }
+          New-Item -ItemType Directory -Force release | Out-Null
+          $version = node -p "require('./package.json').version"
+          $zip = "release/FILE-O-Meet-Windows-x64-v$version-unsigned.zip"
+          Compress-Archive -Path 'dist/FILE-O-Meeting-win32-x64/*' -DestinationPath $zip -CompressionLevel Optimal -Force
+          if (-not (Test-Path $zip)) { throw 'Release archive missing' }
+          $file = (Get-Item $zip).Name
+          $hash = (Get-FileHash -Path $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  $file" | Set-Content -Path release/SHA256SUMS -Encoding utf8
+          Write-Host "Unsigned release: $file"
+      - name: Upload unsigned release artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: FILE-O-Meet-Windows-x64-unsigned
+          path: release/*
+          if-no-files-found: error
+          retention-days: 30
