@@ -62,19 +62,43 @@ jobs:
               exit 1
             fi
           done
+          # Windows PKCS#12 exports may use modern PBE / SHA-256 MAC which
+          # macOS security import incorrectly reports as "wrong password".
+          # Normalize it locally on this ephemeral macOS runner to the widely
+          # supported 3DES + SHA-1 PKCS#12 wrapper before keychain import.
+          # The signing identity (certificate + private key) is unchanged.
+          umask 077
+          OPENSSL="$(brew --prefix openssl@3)/bin/openssl"
+          if [ ! -x "$OPENSSL" ]; then
+            echo "::error::OpenSSL 3 is missing from the macOS runner"
+            exit 1
+          fi
           CERT="$RUNNER_TEMP/fileo-developer-id.p12"
+          COMPAT_CERT="$RUNNER_TEMP/fileo-developer-id-macos.p12"
+          COMBINED_PEM="$RUNNER_TEMP/fileo-developer-id-temporary.pem"
           KEYCHAIN="$RUNNER_TEMP/fileo-ci.keychain-db"
-          KEYCHAIN_PASSWORD="$(openssl rand -hex 24)"
+          KEYCHAIN_PASSWORD="$("$OPENSSL" rand -hex 24)"
+          trap 'rm -f "$CERT" "$COMPAT_CERT" "$COMBINED_PEM"' EXIT
           printf '%s' "$FILEO_MAC_CERT_P12_BASE64" | base64 -D > "$CERT"
           chmod 600 "$CERT"
+          if ! "$OPENSSL" pkcs12 -in "$CERT" -passin env:FILEO_MAC_CERT_PASSWORD -noout 2>/dev/null; then
+            echo "::error::Cannot decrypt Apple PKCS#12 archive: check FILEO_MAC_CERT_PASSWORD and FILEO_MAC_CERT_P12_BASE64 secrets"
+            exit 1
+          fi
+          # Transient unencrypted PEM is restricted to this ephemeral runner
+          # and removed at the end of this step; it is never uploaded/artifacted.
+          "$OPENSSL" pkcs12 -in "$CERT" -passin env:FILEO_MAC_CERT_PASSWORD -nodes -out "$COMBINED_PEM"
+          "$OPENSSL" pkcs12 -export -in "$COMBINED_PEM" -out "$COMPAT_CERT" \
+            -passout env:FILEO_MAC_CERT_PASSWORD \
+            -keypbe PBE-SHA1-3DES -certpbe PBE-SHA1-3DES -macalg sha1
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
           security set-keychain-settings -lut 7200 "$KEYCHAIN"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
-          security import "$CERT" -k "$KEYCHAIN" -P "$FILEO_MAC_CERT_PASSWORD" -T /usr/bin/codesign
+          security import "$COMPAT_CERT" -k "$KEYCHAIN" -P "$FILEO_MAC_CERT_PASSWORD" -T /usr/bin/codesign
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
           security list-keychains -d user -s "$KEYCHAIN"
+          security find-identity -v -p codesigning "$KEYCHAIN"
           echo "FILEO_MAC_KEYCHAIN=$KEYCHAIN" >> "$GITHUB_ENV"
-          rm -f "$CERT"
 
       - name: Package Apple Silicon
         env:
