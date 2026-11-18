@@ -119,9 +119,24 @@ jobs:
           grep -q "arm64" "$RUNNER_TEMP/mas-architecture.txt"
           if [ "$FILEO_MAS_SIGNED" = "1" ]; then
             codesign --verify --deep --strict --verbose=2 "$APP"
-            codesign -d --entitlements - "$APP" > "$RUNNER_TEMP/mas-entitlements.plist" 2>/dev/null
-            plutil -extract com.apple.security.app-sandbox raw -o - "$RUNNER_TEMP/mas-entitlements.plist" | grep -Fx 'true'
-            test -f "$APP/Contents/embedded.provisionprofile"
+            # codesign can emit DER entitlements by default; --xml forces a
+            # parseable property list. PlistBuddy treats dotted entitlement
+            # names as literal keys, unlike plutil -extract (keypath syntax).
+            ENTITLEMENTS="$RUNNER_TEMP/mas-entitlements.plist"
+            codesign -d --entitlements - --xml "$APP" > "$ENTITLEMENTS" 2>/dev/null
+            plutil -lint "$ENTITLEMENTS"
+            sandbox_value="$(/usr/libexec/PlistBuddy -c 'Print :com.apple.security.app-sandbox' "$ENTITLEMENTS")"
+            echo "Signed app sandbox entitlement: $sandbox_value"
+            if [ "$sandbox_value" != 'true' ]; then
+              echo "::error::App Sandbox is not enabled in the actual code signature"
+              exit 1
+            fi
+            if [ ! -f "$APP/Contents/embedded.provisionprofile" ]; then
+              echo "::error::Signed MAS app has no embedded provisioning profile"
+              exit 1
+            fi
+            security cms -D -i "$APP/Contents/embedded.provisionprofile" > "$RUNNER_TEMP/embedded-profile.plist"
+            /usr/libexec/PlistBuddy -c 'Print :Entitlements:com.apple.application-identifier' "$RUNNER_TEMP/embedded-profile.plist" | grep -Fx 'RWWC682LU6.com.fileo.meeting'
           else
             echo "::warning::MAS QA is unsigned: entitlements and sandbox runtime not validated. This artifact is NOT FOR APP STORE SUBMISSION."
           fi
