@@ -140,6 +140,31 @@ jobs:
           else
             echo "::warning::MAS QA is unsigned: entitlements and sandbox runtime not validated. This artifact is NOT FOR APP STORE SUBMISSION."
           fi
+      - name: Ensure installed app files are readable by non-root users
+        if: ${{ (github.event_name == 'workflow_dispatch' && inputs.signed_release) || (github.event_name == 'push' && github.event.head_commit.message == 'mac-app-store-upload-1-0') }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP="dist/FILE-O-Meeting-mas-universal/FILE-O-Meeting.app"
+          # A CI-created provisioning profile is private (0600) by default.
+          # productbuild preserves that mode, and App Store Connect rejects a
+          # package containing app resources unreadable by standard users.
+          # Grant all users read access to files and search access to dirs,
+          # retaining executable bits only where they already exist.
+          chmod -R a+rX "$APP"
+          if find "$APP" -type f ! -perm -004 -print | grep -q .; then
+            echo "::error::Some app files are unreadable by non-root users"
+            find "$APP" -type f ! -perm -004 -print | head -25
+            exit 1
+          fi
+          if find "$APP" -type d ! -perm -005 -print | grep -q .; then
+            echo "::error::Some app directories are inaccessible to non-root users"
+            find "$APP" -type d ! -perm -005 -print | head -25
+            exit 1
+          fi
+          test -r "$APP/Contents/embedded.provisionprofile"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          echo "APP_STORE_FILE_PERMISSIONS_OK"
       - name: Build Mac App Store installer package
         if: ${{ ((github.event_name == 'workflow_dispatch' && inputs.signed_release) || (github.event_name == 'push' && github.event.head_commit.message == 'mac-app-store-upload-1-0')) }}
         shell: bash
