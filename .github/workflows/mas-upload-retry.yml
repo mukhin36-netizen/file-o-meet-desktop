@@ -1,0 +1,45 @@
+name: FILE-O Meet Mac App Store upload (signed artifact retry)
+
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/mas-upload-retry.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  upload:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - name: Download previously signed and validated installer
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p mas-signed
+          gh run download 44303610937 --repo "$GITHUB_REPOSITORY" --name FILE-O-Meet-Mac-App-Store-1.0-SIGNED-PKG --dir mas-signed
+          PKG="$(find mas-signed -name 'FILE-O-Meet-Mac-App-Store-1.0.pkg' -type f -print -quit)"
+          test -s "$PKG"
+          CHECKSUM="$(find mas-signed -name 'SHA256SUMS' -type f -print -quit)"
+          test -s "$CHECKSUM"
+          expected="$(awk 'NR==1 {print $1}' "$CHECKSUM")"
+          actual="$(shasum -a 256 "$PKG" | awk '{print $1}')"
+          test "$expected" = "$actual"
+          echo "MAS_SIGNED_PKG=$PKG" >> "$GITHUB_ENV"
+          echo "Signed installer from successful Apple validation verified via SHA-256"
+      - name: Submit the signed package to App Store Connect (not App Review)
+        shell: bash
+        env:
+          FILEO_APPLE_ID: ${{ secrets.FILEO_APPLE_ID }}
+          FILEO_APPLE_APP_PASSWORD: ${{ secrets.FILEO_APPLE_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          : "${FILEO_APPLE_ID:?Missing Apple account email}"
+          : "${FILEO_APPLE_APP_PASSWORD:?Missing Apple app-specific password}"
+          xcrun altool --upload-app --file "$MAS_SIGNED_PKG" --type macos --username "$FILEO_APPLE_ID" --password "@env:FILEO_APPLE_APP_PASSWORD"
+          echo "FILE-O Meet 1.0 (1) uploaded to App Store Connect; processing may still be pending."
