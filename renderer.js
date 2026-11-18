@@ -488,7 +488,10 @@
   BRIDGE.onUpdate(applyUpdate);
   $('openCabinet').addEventListener('click', () => BRIDGE.open(HOST + '/account?section=telemost'));
   $('openLibrary').addEventListener('click', () => BRIDGE.open(HOST + '/account?section=telemost'));
-  $('openPricing').addEventListener('click', () => BRIDGE.open(HOST + '/pricing'));
+  // Mac App Store apps must not direct users to an external purchase page.
+  // The website-distributed version retains its original Pricing button.
+  if (BRIDGE.isMacAppStore) $('openPricing').remove();
+  else $('openPricing').addEventListener('click', () => BRIDGE.open(HOST + '/pricing'));
   $('help').addEventListener('click', () => BRIDGE.open(HOST + '/meeting'));
   $('viewReport').addEventListener('click', () => {
     const id = state.completedMeetingId || state.meetingId;

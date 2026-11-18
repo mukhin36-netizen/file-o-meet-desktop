@@ -7,6 +7,7 @@ function invoke(name, value) {
   return ipcRenderer.invoke('meeting:' + name, value);
 }
 contextBridge.exposeInMainWorld('fileo', Object.freeze({
+  isMacAppStore: process.mas === true,
   pair: (code) => invoke('pair', code),
   profile: () => invoke('profile'),
   list: () => invoke('list'),

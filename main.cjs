@@ -177,6 +177,7 @@ function startTimers() {
 function validRemoteUrl(url) {
   try {
     const parsed = new URL(url);
+    if (process.mas === true && parsed.pathname.startsWith('/pricing')) return false;
     return parsed.origin === HOST && /^\/(account|meeting|pricing|utility\/speech-to-text)/.test(parsed.pathname);
   } catch (_) { return false; }
 }
