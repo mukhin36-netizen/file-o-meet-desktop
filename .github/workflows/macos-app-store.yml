@@ -42,7 +42,7 @@ jobs:
           set -euo pipefail
           plutil -lint build/entitlements.mas.plist build/entitlements.mas.inherit.plist
       - name: Import Mac App Store signing identities
-        if: ${{ ((github.event_name == 'workflow_dispatch' && inputs.signed_release) || (github.event_name == 'push' && github.event.head_commit.message == 'mac-app-store-upload-1-0')) }}
+        if: ${{ ((github.event_name == 'workflow_dispatch' && inputs.signed_release) || (github.event_name == 'push' && github.event.head_commit.message == 'mac-app-store-upload-1-0-build2')) }}
         shell: bash
         env:
           FILEO_MAS_DIST_P12_BASE64: ${{ secrets.FILEO_MAS_DIST_P12_BASE64 }}
@@ -95,7 +95,7 @@ jobs:
           echo "FILEO_MAS_PROVISIONING_PROFILE=$PROFILE" >> "$GITHUB_ENV"
       - name: Package universal MAS Electron app
         env:
-          FILEO_MAS_SIGNED: ${{ ((github.event_name == 'workflow_dispatch' && inputs.signed_release) || (github.event_name == 'push' && github.event.head_commit.message == 'mac-app-store-upload-1-0')) && '1' || '0' }}
+          FILEO_MAS_SIGNED: ${{ ((github.event_name == 'workflow_dispatch' && inputs.signed_release) || (github.event_name == 'push' && github.event.head_commit.message == 'mac-app-store-upload-1-0-build2')) && '1' || '0' }}
           FILEO_MAS_APP_IDENTITY: ${{ secrets.FILEO_MAS_APP_IDENTITY }}
           FILEO_MAS_KEYCHAIN: ${{ env.FILEO_MAS_SIGNING_KEYCHAIN }}
           FILEO_MAS_PROFILE: ${{ env.FILEO_MAS_PROVISIONING_PROFILE }}
@@ -103,7 +103,7 @@ jobs:
       - name: Verify bundle and signatures
         shell: bash
         env:
-          FILEO_MAS_SIGNED: ${{ ((github.event_name == 'workflow_dispatch' && inputs.signed_release) || (github.event_name == 'push' && github.event.head_commit.message == 'mac-app-store-upload-1-0')) && '1' || '0' }}
+          FILEO_MAS_SIGNED: ${{ ((github.event_name == 'workflow_dispatch' && inputs.signed_release) || (github.event_name == 'push' && github.event.head_commit.message == 'mac-app-store-upload-1-0-build2')) && '1' || '0' }}
         run: |
           set -euo pipefail
           APP="dist/FILE-O-Meeting-mas-universal/FILE-O-Meeting.app"
@@ -111,7 +111,7 @@ jobs:
           PLIST="$APP/Contents/Info.plist"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$PLIST")" = "com.fileo.meeting"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$PLIST")" = "1.0"
-          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$PLIST")" = "1"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$PLIST")" = "2"
           /usr/libexec/PlistBuddy -c 'Print :NSMicrophoneUsageDescription' "$PLIST" > /dev/null
           /usr/libexec/PlistBuddy -c 'Print :NSAudioCaptureUsageDescription' "$PLIST" > /dev/null
           lipo -info "$APP/Contents/MacOS/FILE-O-Meeting" | tee "$RUNNER_TEMP/mas-architecture.txt"
@@ -141,7 +141,7 @@ jobs:
             echo "::warning::MAS QA is unsigned: entitlements and sandbox runtime not validated. This artifact is NOT FOR APP STORE SUBMISSION."
           fi
       - name: Ensure installed app files are readable by non-root users
-        if: ${{ (github.event_name == 'workflow_dispatch' && inputs.signed_release) || (github.event_name == 'push' && github.event.head_commit.message == 'mac-app-store-upload-1-0') }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && inputs.signed_release) || (github.event_name == 'push' && github.event.head_commit.message == 'mac-app-store-upload-1-0-build2') }}
         shell: bash
         run: |
           set -euo pipefail
@@ -166,28 +166,28 @@ jobs:
           codesign --verify --deep --strict --verbose=2 "$APP"
           echo "APP_STORE_FILE_PERMISSIONS_OK"
       - name: Build Mac App Store installer package
-        if: ${{ ((github.event_name == 'workflow_dispatch' && inputs.signed_release) || (github.event_name == 'push' && github.event.head_commit.message == 'mac-app-store-upload-1-0')) }}
+        if: ${{ ((github.event_name == 'workflow_dispatch' && inputs.signed_release) || (github.event_name == 'push' && github.event.head_commit.message == 'mac-app-store-upload-1-0-build2')) }}
         shell: bash
         env:
           FILEO_MAS_INSTALLER_IDENTITY: ${{ secrets.FILEO_MAS_INSTALLER_IDENTITY }}
         run: |
           set -euo pipefail
           mkdir -p store-output
-          productbuild --component "dist/FILE-O-Meeting-mas-universal/FILE-O-Meeting.app" /Applications --sign "$FILEO_MAS_INSTALLER_IDENTITY" --keychain "$FILEO_MAS_SIGNING_KEYCHAIN" "store-output/FILE-O-Meet-Mac-App-Store-1.0.pkg"
-          pkgutil --check-signature "store-output/FILE-O-Meet-Mac-App-Store-1.0.pkg"
+          productbuild --component "dist/FILE-O-Meeting-mas-universal/FILE-O-Meeting.app" /Applications --sign "$FILEO_MAS_INSTALLER_IDENTITY" --keychain "$FILEO_MAS_SIGNING_KEYCHAIN" "store-output/FILE-O-Meet-Mac-App-Store-1.0-build2.pkg"
+          pkgutil --check-signature "store-output/FILE-O-Meet-Mac-App-Store-1.0-build2.pkg"
           shasum -a 256 store-output/*.pkg > store-output/SHA256SUMS
       - name: Upload signed installer for manual App Store Connect submission
-        if: ${{ ((github.event_name == 'workflow_dispatch' && inputs.signed_release) || (github.event_name == 'push' && github.event.head_commit.message == 'mac-app-store-upload-1-0')) }}
+        if: ${{ ((github.event_name == 'workflow_dispatch' && inputs.signed_release) || (github.event_name == 'push' && github.event.head_commit.message == 'mac-app-store-upload-1-0-build2')) }}
         uses: actions/upload-artifact@v6
         with:
-          name: FILE-O-Meet-Mac-App-Store-1.0-SIGNED-PKG
+          name: FILE-O-Meet-Mac-App-Store-1.0-BUILD2-SIGNED-PKG
           path: store-output/
           if-no-files-found: error
           retention-days: 30
       # The upload is deliberately one-off and never runs in normal CI.
       # It validates and delivers the signed PKG but does NOT submit for review.
       - name: Validate signed installer with App Store Connect
-        if: ${{ github.event_name == 'push' && github.event.head_commit.message == 'mac-app-store-upload-1-0' }}
+        if: ${{ github.event_name == 'push' && github.event.head_commit.message == 'mac-app-store-upload-1-0-build2' }}
         shell: bash
         env:
           FILEO_APPLE_ID: ${{ secrets.FILEO_APPLE_ID }}
@@ -196,19 +196,19 @@ jobs:
           set -euo pipefail
           : "${FILEO_APPLE_ID:?Apple ID secret required}"
           : "${FILEO_APPLE_APP_PASSWORD:?App-specific password secret required}"
-          xcrun altool --validate-app --file "store-output/FILE-O-Meet-Mac-App-Store-1.0.pkg" --type macos --username "$FILEO_APPLE_ID" --password "@env:FILEO_APPLE_APP_PASSWORD"
+          xcrun altool --validate-app --file "store-output/FILE-O-Meet-Mac-App-Store-1.0-build2.pkg" --type macos --username "$FILEO_APPLE_ID" --password "@env:FILEO_APPLE_APP_PASSWORD"
       - name: Upload FILE-O Meet 1.0 to App Store Connect
-        if: ${{ github.event_name == 'push' && github.event.head_commit.message == 'mac-app-store-upload-1-0' }}
+        if: ${{ github.event_name == 'push' && github.event.head_commit.message == 'mac-app-store-upload-1-0-build2' }}
         shell: bash
         env:
           FILEO_APPLE_ID: ${{ secrets.FILEO_APPLE_ID }}
           FILEO_APPLE_APP_PASSWORD: ${{ secrets.FILEO_APPLE_APP_PASSWORD }}
         run: |
           set -euo pipefail
-          xcrun altool --upload-app --file "store-output/FILE-O-Meet-Mac-App-Store-1.0.pkg" --type macos --username "$FILEO_APPLE_ID" --password "@env:FILEO_APPLE_APP_PASSWORD"
-          echo "APP_STORE_CONNECT_UPLOAD_SUBMITTED: build 1.0 (1), com.fileo.meeting"
+          xcrun altool --upload-app --file "store-output/FILE-O-Meet-Mac-App-Store-1.0-build2.pkg" --type macos --username "$FILEO_APPLE_ID" --password "@env:FILEO_APPLE_APP_PASSWORD"
+          echo "APP_STORE_CONNECT_UPLOAD_SUBMITTED: build 1.0 (2), com.fileo.meeting"
       - name: Record unsigned QA result without distribution
-        if: ${{ !(((github.event_name == 'workflow_dispatch' && inputs.signed_release) || (github.event_name == 'push' && github.event.head_commit.message == 'mac-app-store-upload-1-0'))) }}
+        if: ${{ !(((github.event_name == 'workflow_dispatch' && inputs.signed_release) || (github.event_name == 'push' && github.event.head_commit.message == 'mac-app-store-upload-1-0-build2'))) }}
         run: |
           echo "Mac App Store universal app was packaged and metadata checked."
           echo "No signing certificates installed; no store package released."
