@@ -25,6 +25,6 @@ mkdir -p "$BASE/native/bin"
 lipo -create "$TEMP/audiotee-arm64" "$TEMP/audiotee-x86_64" \
   -output "$BASE/native/bin/fileo-system-audio"
 chmod 755 "$BASE/native/bin/fileo-system-audio"
-lipo -verify_arch arm64 x86_64 "$BASE/native/bin/fileo-system-audio"
+lipo "$BASE/native/bin/fileo-system-audio" -verify_arch arm64 x86_64
 file "$BASE/native/bin/fileo-system-audio"
 echo "NATIVE_SYSTEM_AUDIO_READY_UNIVERSAL $SHA"
