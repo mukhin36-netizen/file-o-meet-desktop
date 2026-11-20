@@ -70,5 +70,5 @@ test('native process failure rejects and stops cleanly',async()=>{
 test('no arbitrary external binary if bundled resource is missing',async()=>{
  const engine=new NativeSystemAudio({binary:'/no/such/native/binary'});
  assert.equal(engine.available(),false);
- await assert.rejects(engine.start(),/0\.6\.4/);
+ await assert.rejects(engine.start(),/0\.6\.5/);
 });

@@ -26,7 +26,7 @@ class NativeSystemAudio {
   async start() {
     if (this.proc) throw Error('Запись звука компьютера уже запущена.');
     if (!this.available()) {
-      throw Error('Для записи всего звука Mac требуется FILE-O Meet 0.6.4 или новее. Обновите приложение.');
+      throw Error('Для записи системного звука требуется обновлённая FILE-O Meet 0.6.5 или новее. Обновите приложение.');
     }
     this.ending = false;
     this.leftover = Buffer.alloc(0);

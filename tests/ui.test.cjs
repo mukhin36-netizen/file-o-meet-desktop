@@ -161,7 +161,9 @@ test('start, mark, encrypted queue contract and stop in correct order', async ()
     await tick();
     assert.equal(f.doc.getElementById('livePanel').hidden, false);
     assert.equal(f.doc.getElementById('recordIndicator').hidden, false);
-    assert.ok(f.calls.indexOf('display') < f.calls.indexOf('server-start'));
+    assert.ok(f.calls.indexOf('native-system-audio') < f.calls.indexOf('server-start'));
+    assert.equal(f.calls.includes('display'),false,
+      'Windows audio-only capture must never request a screen or window.');
     assert.equal(f.calls.includes('microphone'),false,
       'System-audio-only default must never request mic permission.');
     f.doc.getElementById('highlight').click();
@@ -193,15 +195,16 @@ test('mic only works without OS screen permissions', async () => {
     await tick();
   } finally { f.close(); }
 });
-test('silently ended system audio is rejected without creating a server job', async () => {
-  const f = build({ noSystemAudio: true });
+test('Windows WASAPI failure is visible and does not create an empty server job', async () => {
+  const f = build({ platform:'win32', nativeDenied:true });
   try {
     await tick();
     f.doc.getElementById('microphone').checked = false;
     f.doc.getElementById('start').click();
     await tick();
     assert.equal(f.calls.includes('server-start'), false);
-    assert.match(f.doc.getElementById('status').textContent, /аудиодорожку/);
+    assert.match(f.doc.getElementById('status').textContent, /Не удалось записать звук Windows/);
+    assert.equal(f.calls.includes('display'),false);
   } finally { f.close(); }
 });
 test('after report completion a fresh meeting can start without restarting the app', async () => {
