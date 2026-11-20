@@ -20,6 +20,22 @@
     output.textContent = String(text || '');
     output.classList.toggle('error', error);
   }
+  function generatedMeetingTitle() {
+    let current = 0;
+    try {
+      current = Number.parseInt(localStorage.getItem('fileo_meet_next_record') || '0', 10);
+    } catch (_) {}
+    if (!Number.isSafeInteger(current) || current < 0 || current > 1000000) current = 0;
+    const next = current + 1;
+    const now = new Date();
+    const dd = String(now.getDate()).padStart(2, '0');
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const yyyy = now.getFullYear();
+    const hh = String(now.getHours()).padStart(2, '0');
+    const minute = String(now.getMinutes()).padStart(2, '0');
+    return { title: 'Запись №' + next + ' — ' + dd + '.' + mm + '.' + yyyy +
+                    ', ' + hh + ':' + minute, next };
+  }
   function permissionError(kind, message, autoOpenSettings = false) {
     const err = Error(message);
     err.permissionKind = kind;
@@ -50,7 +66,6 @@
   }
   function updateValidation() {
     $('start').disabled = Boolean(capture?.active) ||
-      !$('consent').checked ||
       (!$('systemSound').checked && !$('microphone').checked);
   }
   function toggleButton(button, running) {
@@ -240,6 +255,9 @@
     if (!capture) return;
     if (capture.systemStream) capture.systemStream.getTracks().forEach(track => track.stop());
     if (capture.micStream) capture.micStream.getTracks().forEach(track => track.stop());
+    if (capture.nativeUnsubscribe) capture.nativeUnsubscribe();
+    if (capture.nativeLostUnsubscribe) capture.nativeLostUnsubscribe();
+    if (capture.nativeAudio) BRIDGE.stopSystemAudio().catch(() => {});
     if (capture.ctx) capture.ctx.close().catch(() => {});
     capture.systemStream = capture.micStream = capture.ctx = null;
     stopMeters();
@@ -256,15 +274,18 @@
     const system = $('systemSound').checked;
     const mic = $('microphone').checked;
     if (!system && !mic) throw Error('Выберите хотя бы один источник звука.');
-    const title = $('subject').value.trim();
+    const enteredTitle = $('subject').value.trim();
+    const automatic = enteredTitle ? null : generatedMeetingTitle();
+    const title = enteredTitle || automatic.title;
     const count = $('participants').value.trim();
     if (title.length < 3 || title.length > 120) {
-      throw Error('Введите тему встречи длиной от 3 до 120 символов.');
+      throw Error('Название встречи должно содержать 3–120 символов.');
     }
     if (count && (!/^(?:[1-9]|[1-9][0-9]|100)$/.test(count))) {
       throw Error('Количество участников должно быть от 1 до 100.');
     }
-    if (!$('consent').checked) throw Error('Подтвердите уведомление участников.');
+    // The explicit "Начать запись" click confirms the concise
+    // participant-notification notice placed immediately above the button.
     if (!window.isSecureContext || !navigator.mediaDevices) {
       throw Error('Операционная система запретила доступ к записи звука.');
     }
@@ -277,12 +298,65 @@
     capture = draft;
     let serverStarted = false;
     try {
-      // Must be called FIRST, directly in the user's Start click: macOS uses
-      // a native picker and needs transient user activation.
-      if (system) {
-        // On macOS, getDisplayMedia triggers the native system picker and
-        // the one-time permission prompt on first use. Do not replace it
-        // with a custom silent desktopCapturer source selection.
+      const nativeMacAudio = system && BRIDGE.platform === 'darwin' &&
+                             BRIDGE.isMacAppStore !== true;
+      if (nativeMacAudio) {
+        // Core Audio Process Tap: full Mac output, no video/window picker.
+        // The app itself never records or sends any screen pixels.
+        draft.ctx = new AudioContext({latencyHint:'interactive'});
+        draft.mix = draft.ctx.createMediaStreamDestination();
+        const analyser=draft.ctx.createAnalyser();
+        analyser.fftSize=512;
+        activeSystemAnalyser=analyser;
+        analyser.connect(draft.mix);
+        let nextTime=0;
+        draft.nativeAudio=true;
+        draft.nativeUnsubscribe=BRIDGE.onSystemPCM(base64=>{
+          if (draft!==capture || draft.stopping || !draft.ctx) return;
+          let bytes;
+          try{
+            const raw=atob(base64);
+            bytes=Uint8Array.from(raw,ch=>ch.charCodeAt(0));
+          }catch(_){return;}
+          const frames=Math.floor(bytes.byteLength/2);
+          if (!frames || frames>32000) return;
+          const audio=draft.ctx.createBuffer(1,frames,16000);
+          const samples=audio.getChannelData(0);
+          const view=new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength);
+          for(let i=0;i<frames;i++)
+            samples[i]=view.getInt16(i*2,true)/32768;
+          const stream=draft.ctx.createBufferSource();
+          stream.buffer=audio;
+          stream.connect(analyser);
+          const now=draft.ctx.currentTime;
+          if (nextTime<now || nextTime>now+0.9)
+            nextTime=now+0.08;
+          stream.start(nextTime);
+          nextTime+=frames/16000;
+        });
+        draft.nativeLostUnsubscribe=BRIDGE.onSystemAudioLost(()=>{
+          if (draft===capture && draft.active) {
+            setStatus('Звук компьютера перестал поступать. Завершаем запись и сохраняем уже полученные фрагменты.',true);
+            stopCapture();
+          }
+        });
+        await draft.ctx.resume();
+        if (draft.ctx.state!=='running')
+          throw Error('Не удалось запустить аудиосистему Mac.');
+        try {
+          await BRIDGE.startSystemAudio();
+        }catch(error){
+          if (/обновите приложение|0\\.6\\.4/i.test(error.message||''))
+            throw error;
+          throw permissionError('system',
+            error.message||'macOS не разрешила захват системного звука.',
+            false);
+        }
+      }
+      // Windows uses native Electron loopback. Mac App Store builds retain
+      // Apple's own picker because the sandbox forbids direct process taps.
+      if (system && !nativeMacAudio) {
+        // The display API must still be first on platforms with a picker.
         try {
           draft.systemStream = await navigator.mediaDevices.getDisplayMedia({
             audio: true, video: { width: 320, height: 180, frameRate: 2 }
@@ -326,8 +400,8 @@
             'Микрофон не предоставил рабочую аудиодорожку.');
         }
       }
-      draft.ctx = new AudioContext({ latencyHint: 'interactive' });
-      const mix = draft.ctx.createMediaStreamDestination();
+      if(!draft.ctx)draft.ctx = new AudioContext({ latencyHint: 'interactive' });
+      const mix = draft.mix || draft.ctx.createMediaStreamDestination();
       if (draft.systemStream) {
         const source = draft.ctx.createMediaStreamSource(draft.systemStream);
         const analyser = draft.ctx.createAnalyser();
@@ -352,6 +426,11 @@
         participants_informed: true, microphone: mic
       });
       serverStarted = true;
+      if (automatic) {
+        try { localStorage.setItem('fileo_meet_next_record', String(automatic.next)); }
+        catch (_) {}
+        $('subject').value = title;
+      }
       draft.id = response.id;
       draft.startedAt = performance.now();
       draft.active = true;
@@ -522,7 +601,7 @@
       window.dispatchEvent(new CustomEvent('fileo:disconnected')); }
     catch (error) { setStatus(error.message, true); }
   });
-  for (const id of ['consent', 'systemSound', 'microphone']) {
+  for (const id of ['systemSound', 'microphone']) {
     $(id).addEventListener('change', updateValidation);
   }
   async function openRecordingSettings(kind) {
@@ -605,7 +684,7 @@
       }
       state = { state: 'idle', recording: false, busy: false };
       $('newMeeting').hidden = true;
-      $('consent').checked = false;
+      $('subject').value = '';
       $('highlightNotice').hidden = true;
       $('highlightText').textContent = 'Выделить важный момент';
       showPanel('setup');

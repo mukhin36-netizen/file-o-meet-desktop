@@ -72,13 +72,18 @@ test('copy and export buttons connect to real clipboard and cabinet actions',asy
     assert.ok(f.called.some(url=>url.includes('/account?section=telemost&meeting=')));
   }finally{f.w.close();}
 });
-test('sidebar record action navigates to real consent-protected recorder',async()=>{
+test('sidebar record starts the real recorder with a single click when ready',async()=>{
   const f=setup();try{
-    await tick();f.w.document.querySelector('#sidebarRecordButton').click();await tick();
+    await tick();
+    let started=0;
+    const button=f.w.document.getElementById('start');
+    button.disabled=false;
+    button.addEventListener('click',()=>started++);
+    f.w.document.querySelector('#sidebarRecordButton').click();await tick();
     assert.equal(f.w.document.querySelector('#recordPage').hidden,false);
     assert.equal(f.w.document.querySelector('#meetingSubnav').hidden,true);
     assert.equal(f.w.document.querySelector('#topMeetActions').hidden,true);
-    assert.equal(f.w.document.querySelector('#start').disabled,true);
+    assert.equal(started,1);
   }finally{f.w.close();}
 });
 test('recording indicator accurately follows real bridge state',async()=>{

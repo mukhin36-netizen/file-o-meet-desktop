@@ -10,6 +10,11 @@ on:
       - 'main.cjs'
       - 'preload.cjs'
       - 'renderer.js'
+      - 'meet_ui.js'
+      - 'meet_theme.css'
+      - 'recording_overlay*'
+      - 'system_audio_capture.cjs'
+      - 'native/**'
       - 'assets/**'
       - '.github/workflows/macos-release.yml'
   workflow_dispatch:
@@ -43,6 +48,10 @@ jobs:
 
       - name: Test meeting features
         run: npm test
+
+      - name: Build universal native macOS system-audio helper
+        shell: bash
+        run: bash native/build-audio.sh
 
       - name: Import Developer ID certificate for signed release
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.signed_release }}
@@ -100,6 +109,16 @@ jobs:
           security find-identity -v -p codesigning "$KEYCHAIN"
           echo "FILEO_MAC_KEYCHAIN=$KEYCHAIN" >> "$GITHUB_ENV"
 
+      - name: Sign native system-audio executable
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.signed_release }}
+        shell: bash
+        env:
+          FILEO_APPLE_SIGN_IDENTITY: ${{ secrets.FILEO_APPLE_SIGN_IDENTITY }}
+        run: |
+          set -euo pipefail
+          codesign --force --options runtime --timestamp --sign "$FILEO_APPLE_SIGN_IDENTITY" native/bin/fileo-system-audio
+          codesign --verify --strict --verbose=2 native/bin/fileo-system-audio
+
       - name: Package Apple Silicon
         env:
           FILEO_MAC_DISTRIBUTE: ${{ github.event_name == 'workflow_dispatch' && inputs.signed_release && '1' || '0' }}
@@ -131,8 +150,13 @@ jobs:
             /usr/libexec/PlistBuddy -c 'Print :NSMicrophoneUsageDescription' "$PLIST" > /dev/null
             /usr/libexec/PlistBuddy -c 'Print :NSAudioCaptureUsageDescription' "$PLIST" > /dev/null
             test -x "$APP/Contents/MacOS/FILE-O-Meeting"
+            test -x "$APP/Contents/Resources/fileo-system-audio"
+            test -r "$APP/Contents/Resources/THIRD_PARTY_AUDIO.md"
+            lipo -verify_arch arm64 x86_64 "$APP/Contents/Resources/fileo-system-audio"
             file "$APP/Contents/MacOS/FILE-O-Meeting"
+            file "$APP/Contents/Resources/fileo-system-audio"
             if [ '${{ github.event_name }}' = 'workflow_dispatch' ] && [ '${{ inputs.signed_release }}' = 'true' ]; then
+              codesign --verify --strict --verbose=2 "$APP/Contents/Resources/fileo-system-audio"
               codesign --verify --deep --strict --verbose=2 "$APP"
               if ! xcrun stapler validate "$APP"; then
                 xcrun stapler staple "$APP"

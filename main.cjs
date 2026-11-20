@@ -12,16 +12,17 @@ const {
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const {NativeSystemAudio} = require('./system_audio_capture.cjs');
 
 const HOST = 'https://file-o.com';
-const VERSION = '0.6.3';
+const VERSION = '0.6.4';
 const CHUNK_MAX = 6 * 1024 * 1024;
 const MAX_CAPTURE_MS = 12 * 3600 * 1000;
 const API_TIMEOUT_MS = 30000;
 const STATUS_INTERVAL_MS = 5500;
 const RETRY_INTERVAL_MS = 6500;
 
-let window = null, tray = null, token = null;
+let window = null, tray = null, token = null, nativeAudio = null, overlay = null;
 let queueState = null, sessionKey = null, draining = false;
 let restoreInProgress = false, lastSeen = -1;
 let statusTimer = null, retryTimer = null, blockerId = null;
@@ -456,7 +457,47 @@ async function highlight() {
       'Важный момент сохранён и будет проанализирован после записи.' });
   return result;
 }
+function createRecordingOverlay() {
+  if (overlay) return;
+  const work=screen.getPrimaryDisplay().workArea;
+  const width=214,height=64;
+  overlay=new BrowserWindow({
+    width,height,
+    x:Math.max(work.x,work.x+work.width-width-18),
+    y:work.y+18,
+    minWidth:width,minHeight:height,
+    frame:false,transparent:true,hasShadow:true,
+    resizable:false,alwaysOnTop:true,skipTaskbar:true,
+    show:false,autoHideMenuBar:true,
+    backgroundColor:'#00000000',
+    webPreferences:{
+      preload:path.join(__dirname,'recording_overlay_preload.cjs'),
+      contextIsolation:true,sandbox:true,nodeIntegration:false,
+      webSecurity:true,backgroundThrottling:false
+    }
+  });
+  try{overlay.setAlwaysOnTop(true,'floating');}catch(_){}
+  if(process.platform==='darwin') {
+    try{overlay.setVisibleOnAllWorkspaces(true,{visibleOnFullScreen:true});}
+    catch(_){}
+  }
+  overlay.webContents.setWindowOpenHandler(()=>({action:'deny'}));
+  overlay.webContents.on('will-navigate',event=>event.preventDefault());
+  overlay.webContents.once('did-finish-load',updateRecordingOverlay);
+  overlay.on('closed',()=>{overlay=null;});
+  overlay.loadFile(path.join(__dirname,'recording_overlay.html'));
+}
+function updateRecordingOverlay() {
+  if(!overlay||overlay.isDestroyed()||overlay.webContents.isLoading())return;
+  if(lastInfo.recording){
+    overlay.showInactive();
+    overlay.webContents.send('meeting:recording-indicator',{
+      startedMs:queueState?.started||Date.now()
+    });
+  }else overlay.hide();
+}
 function updateTray() {
+  updateRecordingOverlay();
   if (!tray) return;
   const active = !!lastInfo.recording;
   tray.setToolTip('FILE-O Meeting' + (active ? ' · ИДЁТ ЗАПИСЬ' : ''));
@@ -551,6 +592,9 @@ function configureCapturePermissions() {
   });
 }
 function setupIPC() {
+  ipcMain.on('meeting:overlay-open',event=>{
+    if(event.sender===overlay?.webContents)showWindow();
+  });
   ipcMain.handle('meeting:pair', async (_event, raw) => claimAccount(String(raw || '').trim().toUpperCase()));
   ipcMain.handle('meeting:profile', () => getProfile());
   ipcMain.handle('meeting:list', async () => {
@@ -595,6 +639,37 @@ function setupIPC() {
   });
   ipcMain.handle('meeting:get-state', () => ({ ...lastInfo, session: queueState ?
     { id: queueState.meetingId, started: queueState.started, finishRequested: queueState.finishRequested } : null }));
+  ipcMain.handle('meeting:system-audio-start', async event => {
+    if (event.sender !== window?.webContents ||
+        !event.sender.getURL().startsWith('file://') || !token) {
+      throw Error('Нет доступа к системному звуку.');
+    }
+    if (process.platform !== 'darwin' || process.mas === true)
+      throw Error('Нативный захват звука доступен только в версии FILE-O Meet для macOS с сайта.');
+    if (nativeAudio?.proc)
+      throw Error('Запись системного звука уже включена.');
+    nativeAudio = new NativeSystemAudio({
+      binary: path.join(process.resourcesPath,'fileo-system-audio'),
+      onPCM: value => {
+        if(window&&!window.isDestroyed()) {
+          window.webContents.send('meeting:system-pcm',value);
+        }
+      },
+      onLost: () => {
+        if(window&&!window.isDestroyed())
+          window.webContents.send('meeting:system-audio-lost');
+      }
+    });
+    return nativeAudio.start();
+  });
+  ipcMain.handle('meeting:system-audio-stop', event => {
+    if (event.sender !== window?.webContents ||
+        !event.sender.getURL().startsWith('file://'))
+      throw Error('Недопустимый источник команды.');
+    nativeAudio?.stop();
+    nativeAudio = null;
+    return {stopped:true};
+  });
   ipcMain.handle('meeting:permission-microphone', async () => {
     if (process.platform === 'darwin') {
       try { return await systemPreferences.askForMediaAccess('microphone'); }
@@ -658,6 +733,7 @@ if (!app.requestSingleInstanceLock()) {
     configureCapturePermissions();
     setupIPC();
     makeWindow();
+    createRecordingOverlay();
     const trayImage = nativeImage.createFromPath(path.join(__dirname, 'assets', 'fileo.png'));
     tray = new Tray(trayImage.resize({ width: 18, height: 18 }));
     tray.on('double-click', () => showWindow());
@@ -671,7 +747,11 @@ if (!app.requestSingleInstanceLock()) {
     logError('start', error);
     app.quit();
   });
-  app.on('before-quit', () => { quitting = true; stopTimers(); recordEnded(); });
+  app.on('before-quit', () => {
+    quitting = true; nativeAudio?.stop(); nativeAudio = null;
+    try{overlay?.destroy();}catch(_){}
+    stopTimers(); recordEnded();
+  });
   app.on('activate', () => showWindow());
   app.on('window-all-closed', () => { if (quitting) app.quit(); });
 }
