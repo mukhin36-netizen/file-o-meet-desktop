@@ -14,7 +14,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 
 const HOST = 'https://file-o.com';
-const VERSION = '0.6.2';
+const VERSION = '0.6.3';
 const CHUNK_MAX = 6 * 1024 * 1024;
 const MAX_CAPTURE_MS = 12 * 3600 * 1000;
 const API_TIMEOUT_MS = 30000;
@@ -601,6 +601,50 @@ function setupIPC() {
       catch (_) { return false; }
     }
     return true;
+  });
+  // Explicit action from the local app only. Never accept an arbitrary URI.
+  // There is no programmatic macOS API to grant system audio capture:
+  // the user must allow it in Apple's privacy controls.
+  ipcMain.handle('meeting:open-recording-settings', async (event, kind) => {
+    if (event.sender !== window?.webContents ||
+        !event.sender.getURL().startsWith('file://')) {
+      throw Error('Недопустимый источник команды.');
+    }
+    if (process.platform !== 'darwin') {
+      return { opened: false, reason: 'macos_only' };
+    }
+    const section = kind === 'microphone' ? 'Privacy_Microphone' :
+                    'Privacy_ScreenCapture';
+    try {
+      await shell.openExternal(
+        'x-apple.systempreferences:com.apple.preference.security?' + section
+      );
+      return { opened: true };
+    } catch (_) {
+      try {
+        await shell.openExternal(
+          'x-apple.systempreferences:com.apple.preference.security'
+        );
+        return { opened: true, fallback: true };
+      } catch (_) {
+        return { opened: false, reason: 'settings_unavailable' };
+      }
+    }
+  });
+  // A permission change can require a relaunch. Only permit this while
+  // completely idle: never discard pending encrypted audio uploads.
+  ipcMain.handle('meeting:restart-for-permissions', async event => {
+    if (event.sender !== window?.webContents ||
+        !event.sender.getURL().startsWith('file://')) {
+      throw Error('Недопустимый источник команды.');
+    }
+    if (queueState || lastInfo.recording || lastInfo.busy) {
+      throw Error('Сначала завершите запись и дождитесь отправки аудиофрагментов.');
+    }
+    app.relaunch();
+    quitting = true;
+    app.quit();
+    return { restarting: true };
   });
 }
 if (!app.requestSingleInstanceLock()) {

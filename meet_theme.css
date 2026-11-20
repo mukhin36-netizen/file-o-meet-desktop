@@ -387,3 +387,26 @@ button.meet-topic-chip{cursor:pointer}
 @media(prefers-reduced-motion:reduce){
  .sidebar-recorder.is-recording .sidebar-rec-wave span,.sidebar-recorder.is-recording .sidebar-rec-dot{animation:none}
 }
+
+/* macOS audio permission recovery — local, no remote pages or scripts. */
+.audio-permission-panel[hidden]{display:none!important}
+.audio-permission-panel{margin:15px 0 18px;padding:18px 20px;border:1px solid #8156be;
+  background:linear-gradient(135deg,#1d1b37 0%,#191c32 100%);
+  border-radius:13px;box-shadow:0 7px 24px #0b092b21;color:#eee8ff}
+.audio-permission-tag{color:#ba9cef;letter-spacing:.10em;font-size:10px;font-weight:800}
+.audio-permission-panel h3{font-size:16px;line-height:1.4;margin:7px 0 8px;
+  color:#f6f2ff;font-weight:750}
+.audio-permission-panel p{font-size:12px;line-height:1.65;margin:0 0 14px;
+  color:#c9bfdf}
+.audio-permission-actions{display:flex;align-items:center;flex-wrap:wrap;gap:9px;
+  margin-bottom:13px}
+.audio-permission-actions button{min-height:36px;padding:9px 13px;
+  white-space:normal;font-size:11.5px}
+.audio-permission-panel small{display:block;color:#a99dc1;font-size:11px;
+  line-height:1.65;max-width:840px}
+.audio-permission-panel #audioPermissionStatus{margin:9px 0 0;
+  min-height:1.3em;color:#c0a7ef}
+@media(max-width:720px){
+  .audio-permission-panel{padding:15px 13px}
+  .audio-permission-actions button{flex:1}
+}

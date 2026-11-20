@@ -20,6 +20,30 @@
     output.textContent = String(text || '');
     output.classList.toggle('error', error);
   }
+  function permissionError(kind, message, autoOpenSettings = false) {
+    const err = Error(message);
+    err.permissionKind = kind;
+    err.autoOpenSettings = autoOpenSettings;
+    return err;
+  }
+  let permissionKind = 'system';
+  function hideAudioPermissions() {
+    const box = $('audioPermissionPanel');
+    if (box) box.hidden = true;
+  }
+  function showAudioPermissions(kind) {
+    if (BRIDGE.platform !== 'darwin') return;
+    permissionKind = kind === 'microphone' ? 'microphone' : 'system';
+    const mic = permissionKind === 'microphone';
+    $('audioPermissionTitle').textContent = mic
+      ? 'Разрешите доступ к микрофону'
+      : 'Разрешите запись звука компьютера';
+    $('audioPermissionText').textContent = mic
+      ? 'macOS не разрешила записывать ваш голос. Откройте настройки и включите FILE-O Meet в разделе «Микрофон».'
+      : 'macOS не выдала системную аудиодорожку. Разрешите FILE-O Meet записывать системный звук, затем попробуйте снова.';
+    $('audioPermissionStatus').textContent = '';
+    $('audioPermissionPanel').hidden = false;
+  }
   function startState(connected) {
     $('pairPanel').hidden = connected;
     $('meetingPanel').hidden = !connected;
@@ -256,25 +280,50 @@
       // Must be called FIRST, directly in the user's Start click: macOS uses
       // a native picker and needs transient user activation.
       if (system) {
-        draft.systemStream = await navigator.mediaDevices.getDisplayMedia({
-          audio: true, video: { width: 320, height: 180, frameRate: 2 }
-        });
+        // On macOS, getDisplayMedia triggers the native system picker and
+        // the one-time permission prompt on first use. Do not replace it
+        // with a custom silent desktopCapturer source selection.
+        try {
+          draft.systemStream = await navigator.mediaDevices.getDisplayMedia({
+            audio: true, video: { width: 320, height: 180, frameRate: 2 }
+          });
+        } catch (error) {
+          if (BRIDGE.platform === 'darwin' &&
+              ['NotAllowedError','PermissionDeniedError','AbortError'].includes(error?.name)) {
+            throw permissionError('system',
+              'Запись звука компьютера не разрешена. Разрешите доступ в macOS или повторите выбор источника.');
+          }
+          throw error;
+        }
         const track = draft.systemStream.getAudioTracks()[0];
         if (!track || track.readyState !== 'live') {
-          throw Error('Система не предоставила рабочую аудиодорожку. ' +
-            'На Mac разрешите запись системного звука и выберите источник в системном окне. ' +
-            'Можно также переключиться на «Только микрофон».');
+          throw permissionError('system',
+            'macOS не предоставила рабочую аудиодорожку. Разрешите запись системного звука и повторите попытку.',
+            BRIDGE.platform === 'darwin');
         }
       }
       if (mic) {
         const allowed = await BRIDGE.microphonePermission();
-        if (!allowed) throw Error('Доступ к микрофону не разрешён в настройках системы.');
-        draft.micStream = await navigator.mediaDevices.getUserMedia({
-          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-          video: false
-        });
+        if (!allowed) {
+          throw permissionError('microphone',
+            'Доступ к микрофону не разрешён. Откройте настройки macOS и разрешите FILE-O Meet использовать микрофон.');
+        }
+        try {
+          draft.micStream = await navigator.mediaDevices.getUserMedia({
+            audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+            video: false
+          });
+        } catch (error) {
+          if (BRIDGE.platform === 'darwin' &&
+              ['NotAllowedError','PermissionDeniedError'].includes(error?.name)) {
+            throw permissionError('microphone',
+              'macOS не разрешила использовать микрофон. Включите доступ в настройках.');
+          }
+          throw error;
+        }
         if (!draft.micStream.getAudioTracks().some(track => track.readyState === 'live')) {
-          throw Error('Микрофон не предоставил аудиодорожку.');
+          throw permissionError('microphone',
+            'Микрофон не предоставил рабочую аудиодорожку.');
         }
       }
       draft.ctx = new AudioContext({ latencyHint: 'interactive' });
@@ -476,10 +525,61 @@
   for (const id of ['consent', 'systemSound', 'microphone']) {
     $(id).addEventListener('change', updateValidation);
   }
+  async function openRecordingSettings(kind) {
+    const result = await BRIDGE.openRecordingSettings(kind);
+    if (!result?.opened) {
+      $('audioPermissionStatus').textContent =
+        'Не удалось открыть настройки автоматически. Откройте «Системные настройки → Конфиденциальность и безопасность» вручную.';
+      return false;
+    }
+    $('audioPermissionStatus').textContent =
+      'Настройки macOS открыты. Разрешите доступ FILE-O Meet, затем вернитесь сюда. При необходимости перезапустите приложение.';
+    return true;
+  }
+  $('openAudioSettings').addEventListener('click', async () => {
+    const button = $('openAudioSettings');
+    toggleButton(button, true);
+    try { await openRecordingSettings(permissionKind); }
+    catch (_) {
+      $('audioPermissionStatus').textContent =
+        'Не удалось открыть настройки macOS. Откройте их вручную через меню Apple.';
+    } finally { toggleButton(button, false); }
+  });
+  $('retryAudioPermission').addEventListener('click', () => {
+    if (!$('start').disabled) $('start').click();
+  });
+  $('restartAfterPermission').addEventListener('click', async () => {
+    const button = $('restartAfterPermission');
+    toggleButton(button, true);
+    $('audioPermissionStatus').textContent = 'Перезапускаем FILE-O Meet с обновлёнными разрешениями…';
+    try {
+      await BRIDGE.restartForPermissions();
+    } catch (error) {
+      $('audioPermissionStatus').textContent =
+        error.message || 'Не удалось перезапустить приложение.';
+      toggleButton(button, false);
+    }
+  });
   $('start').addEventListener('click', async () => {
+    hideAudioPermissions();
     toggleButton($('start'), true);
     try { await beginCapture(); }
-    catch (error) { setStatus(error.message, true); }
+    catch (error) {
+      setStatus(error.message, true);
+      if (error.permissionKind && BRIDGE.platform === 'darwin') {
+        showAudioPermissions(error.permissionKind);
+        // A dead audio track means macOS silently refused CoreAudio Tap.
+        // Open the correct privacy pane automatically once, without ever
+        // modifying permissions or starting recording behind the user's back.
+        if (error.autoOpenSettings) {
+          try { await openRecordingSettings(error.permissionKind); }
+          catch (_) {
+            $('audioPermissionStatus').textContent =
+              'Откройте настройки macOS кнопкой выше.';
+          }
+        }
+      }
+    }
     finally { toggleButton($('start'), false); updateValidation(); }
   });
   $('stop').addEventListener('click', stopCapture);
@@ -488,8 +588,7 @@
   BRIDGE.onUpdate(applyUpdate);
   $('openCabinet').addEventListener('click', () => BRIDGE.open(HOST + '/account?section=telemost'));
   $('openLibrary').addEventListener('click', () => BRIDGE.open(HOST + '/account?section=telemost'));
-  // Mac App Store apps must not direct users to an external purchase page.
-  // The website-distributed version retains its original Pricing button.
+  // Mac App Store builds do not direct users to an external purchase page.
   if (BRIDGE.isMacAppStore) $('openPricing').remove();
   else $('openPricing').addEventListener('click', () => BRIDGE.open(HOST + '/pricing'));
   $('help').addEventListener('click', () => BRIDGE.open(HOST + '/meeting'));

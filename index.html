@@ -124,7 +124,19 @@
                 <span class="source-type">МИКРОФОН</span>
               </label>
             </div>
-            <p class="permission-note">Системный звук может включать уведомления других приложений. Видео не сохраняется. На Mac может потребоваться отдельное разрешение ОС.</p>
+            <p class="permission-note">Системный звук может включать уведомления других приложений. Видео не сохраняется. При первом запуске записи macOS может спросить разрешение — нажмите «Разрешить».</p>
+            <section id="audioPermissionPanel" class="audio-permission-panel" hidden aria-labelledby="audioPermissionTitle">
+              <span class="audio-permission-tag">ДОСТУП К АУДИО · macOS</span>
+              <h3 id="audioPermissionTitle">Нужен доступ к звуку компьютера</h3>
+              <p id="audioPermissionText">macOS не предоставила FILE-O Meet аудиодорожку. Разрешите запись системного аудио в настройках.</p>
+              <div class="audio-permission-actions">
+                <button id="openAudioSettings" type="button" class="btn btn-primary">Открыть настройки macOS</button>
+                <button id="retryAudioPermission" type="button" class="btn btn-outline">Повторить попытку</button>
+                <button id="restartAfterPermission" type="button" class="btn btn-outline">Перезапустить FILE-O Meet</button>
+              </div>
+              <small>Найдите FILE-O Meet или FILE-O-Meeting в разделе «Конфиденциальность и безопасность → Запись экрана и системного аудио». При необходимости полностью перезапустите приложение. Альтернатива — режим «Мой микрофон».</small>
+              <p id="audioPermissionStatus" role="status" aria-live="polite"></p>
+            </section>
             <label for="consent" class="consent-row"><input id="consent" type="checkbox">
               <span>Все участники уведомлены о записи и необходимые разрешения получены.</span></label>
             <div class="setup-actions">
@@ -275,7 +287,7 @@
       </section>
       <p id="status" class="global-status" aria-live="polite" role="status"></p>
     </main>
-    <footer class="app-footer"><span>FILE-O Meet · 0.6.2</span>
+    <footer class="app-footer"><span>FILE-O Meet · 0.6.3</span>
       <span id="connectionState"><span></span> Готово к работе</span>
       <span>Windows / macOS · тестовая версия</span></footer>
   </div>

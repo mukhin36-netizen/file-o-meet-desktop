@@ -21,7 +21,11 @@ contextBridge.exposeInMainWorld('fileo', Object.freeze({
   getState: () => invoke('get-state'),
   open: (url) => invoke('open', url),
   copyText: (text) => invoke('copy-text', text),
+  platform: process.platform,
   microphonePermission: () => invoke('permission-microphone'),
+  openRecordingSettings: (kind = 'system') =>
+    invoke('open-recording-settings', kind === 'microphone' ? 'microphone' : 'system'),
+  restartForPermissions: () => invoke('restart-for-permissions'),
   onUpdate: (handler) => {
     if (typeof handler !== 'function') return () => {};
     const callback = (_event, info) => handler(info);
