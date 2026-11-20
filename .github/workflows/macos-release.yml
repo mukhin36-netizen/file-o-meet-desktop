@@ -152,7 +152,7 @@ jobs:
             test -x "$APP/Contents/MacOS/FILE-O-Meeting"
             test -x "$APP/Contents/Resources/fileo-system-audio"
             test -r "$APP/Contents/Resources/THIRD_PARTY_AUDIO.md"
-            lipo -verify_arch arm64 x86_64 "$APP/Contents/Resources/fileo-system-audio"
+            lipo "$APP/Contents/Resources/fileo-system-audio" -verify_arch arm64 x86_64
             file "$APP/Contents/MacOS/FILE-O-Meeting"
             file "$APP/Contents/Resources/fileo-system-audio"
             if [ '${{ github.event_name }}' = 'workflow_dispatch' ] && [ '${{ inputs.signed_release }}' = 'true' ]; then
