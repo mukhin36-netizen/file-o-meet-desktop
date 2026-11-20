@@ -21,7 +21,7 @@ const config = {
   prune: true,
   appBundleId: 'com.fileo.meeting',
   appVersion: '1.0',
-  buildVersion: '1',
+  buildVersion: '2',
   osxUniversal: { mergeASARs: true },
   appCategoryType: 'public.app-category.productivity',
   extendInfo: {
