@@ -173,7 +173,16 @@
   }
   function bind(){
     el('sidebarRecordButton')?.addEventListener('click',()=>{
+      // One deliberate user action opens the recorder and starts it.
+      // An active recording or processing task is only displayed, never
+      // restarted by another click.
+      const button=el('sidebarRecordButton');
+      const isActive=button?.closest('.sidebar-recorder')?.classList.contains('is-recording');
+      const isBusy=button?.textContent?.includes('обработку');
       el('navNew')?.click();
+      if (isActive || isBusy) return;
+      const start=el('start');
+      if (start && !start.disabled) start.click();
     });
     el('meetingNavBack')?.addEventListener('click',()=>el('navMeetings')?.click());
     document.querySelectorAll('[data-meet-jump]').forEach(button=>{
