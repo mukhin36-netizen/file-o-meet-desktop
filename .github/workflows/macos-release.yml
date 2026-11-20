@@ -54,7 +54,7 @@ jobs:
         run: bash native/build-audio.sh
 
       - name: Import Developer ID certificate for signed release
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.signed_release }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && inputs.signed_release) || (github.event_name == 'push' && contains(github.event.head_commit.message, '[signed-meet-release]')) }}
         shell: bash
         env:
           FILEO_MAC_CERT_P12_BASE64: ${{ secrets.FILEO_MAC_CERT_P12_BASE64 }}
@@ -110,7 +110,7 @@ jobs:
           echo "FILEO_MAC_KEYCHAIN=$KEYCHAIN" >> "$GITHUB_ENV"
 
       - name: Sign native system-audio executable
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.signed_release }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && inputs.signed_release) || (github.event_name == 'push' && contains(github.event.head_commit.message, '[signed-meet-release]')) }}
         shell: bash
         env:
           FILEO_APPLE_SIGN_IDENTITY: ${{ secrets.FILEO_APPLE_SIGN_IDENTITY }}
@@ -121,7 +121,7 @@ jobs:
 
       - name: Package Apple Silicon
         env:
-          FILEO_MAC_DISTRIBUTE: ${{ github.event_name == 'workflow_dispatch' && inputs.signed_release && '1' || '0' }}
+          FILEO_MAC_DISTRIBUTE: ${{ ((github.event_name == 'workflow_dispatch' && inputs.signed_release) || (github.event_name == 'push' && contains(github.event.head_commit.message, '[signed-meet-release]'))) && '1' || '0' }}
           FILEO_APPLE_SIGN_IDENTITY: ${{ secrets.FILEO_APPLE_SIGN_IDENTITY }}
           FILEO_APPLE_TEAM_ID: ${{ secrets.FILEO_APPLE_TEAM_ID }}
           FILEO_APPLE_ID: ${{ secrets.FILEO_APPLE_ID }}
@@ -130,7 +130,7 @@ jobs:
 
       - name: Package Intel
         env:
-          FILEO_MAC_DISTRIBUTE: ${{ github.event_name == 'workflow_dispatch' && inputs.signed_release && '1' || '0' }}
+          FILEO_MAC_DISTRIBUTE: ${{ ((github.event_name == 'workflow_dispatch' && inputs.signed_release) || (github.event_name == 'push' && contains(github.event.head_commit.message, '[signed-meet-release]'))) && '1' || '0' }}
           FILEO_APPLE_SIGN_IDENTITY: ${{ secrets.FILEO_APPLE_SIGN_IDENTITY }}
           FILEO_APPLE_TEAM_ID: ${{ secrets.FILEO_APPLE_TEAM_ID }}
           FILEO_APPLE_ID: ${{ secrets.FILEO_APPLE_ID }}
@@ -155,7 +155,7 @@ jobs:
             lipo "$APP/Contents/Resources/fileo-system-audio" -verify_arch arm64 x86_64
             file "$APP/Contents/MacOS/FILE-O-Meeting"
             file "$APP/Contents/Resources/fileo-system-audio"
-            if [ '${{ github.event_name }}' = 'workflow_dispatch' ] && [ '${{ inputs.signed_release }}' = 'true' ]; then
+            if [ '${{ ((github.event_name == 'workflow_dispatch' && inputs.signed_release) || (github.event_name == 'push' && contains(github.event.head_commit.message, '[signed-meet-release]'))) }}' = 'true' ]; then
               codesign --verify --strict --verbose=2 "$APP/Contents/Resources/fileo-system-audio"
               codesign --verify --deep --strict --verbose=2 "$APP"
               if ! xcrun stapler validate "$APP"; then
@@ -183,7 +183,7 @@ jobs:
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: FILE-O-Meeting-macOS-${{ github.event_name == 'workflow_dispatch' && inputs.signed_release && 'SIGNED-NOTARIZED' || 'UNSIGNED-QA' }}
+          name: FILE-O-Meeting-macOS-${{ ((github.event_name == 'workflow_dispatch' && inputs.signed_release) || (github.event_name == 'push' && contains(github.event.head_commit.message, '[signed-meet-release]'))) && 'SIGNED-NOTARIZED' || 'UNSIGNED-QA' }}
           path: release/
           if-no-files-found: error
           retention-days: 14
