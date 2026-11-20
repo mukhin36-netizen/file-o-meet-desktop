@@ -1,6 +1,6 @@
 'use strict';
 
-// Mac App Store ONLY. The regular macOS Developer ID release uses pack-mac.cjs.
+// Mac App Store ONLY. Build 1.0 (2) upload. The regular macOS Developer ID release uses pack-mac.cjs.
 // QA builds are unsigned and are never suitable for submission to App Store.
 const path = require('node:path');
 const { packager } = require('@electron/packager');
