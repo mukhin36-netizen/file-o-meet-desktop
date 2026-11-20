@@ -298,10 +298,12 @@
     capture = draft;
     let serverStarted = false;
     try {
-      const nativeMacAudio = system && BRIDGE.platform === 'darwin' &&
-                             BRIDGE.isMacAppStore !== true;
-      if (nativeMacAudio) {
-        // Core Audio Process Tap: full Mac output, no video/window picker.
+      const nativeAudioAvailable = system &&
+        (BRIDGE.platform === 'win32' ||
+        (BRIDGE.platform === 'darwin' && BRIDGE.isMacAppStore !== true));
+      if (nativeAudioAvailable) {
+        // Native system output (WASAPI on Windows, CoreAudio on Mac):
+        // no video stream and no screen/window selection.
         // The app itself never records or sends any screen pixels.
         draft.ctx = new AudioContext({latencyHint:'interactive'});
         draft.mix = draft.ctx.createMediaStreamDestination();
@@ -342,20 +344,26 @@
         });
         await draft.ctx.resume();
         if (draft.ctx.state!=='running')
-          throw Error('Не удалось запустить аудиосистему Mac.');
+          throw Error('Не удалось запустить аудиосистему компьютера.');
         try {
           await BRIDGE.startSystemAudio();
         }catch(error){
-          if (/обновите приложение|0\\.6\\.4/i.test(error.message||''))
+          if (/обновите приложение|0\\.6\\.5/i.test(error.message||''))
             throw error;
+          if (BRIDGE.platform === 'win32') {
+            throw Error(
+              'Не удалось записать звук Windows. Проверьте устройство воспроизведения ' +
+              'и запустите приложение снова. ' + (error.message||'')
+            );
+          }
           throw permissionError('system',
             error.message||'macOS не разрешила захват системного звука.',
             false);
         }
       }
-      // Windows uses native Electron loopback. Mac App Store builds retain
-      // Apple's own picker because the sandbox forbids direct process taps.
-      if (system && !nativeMacAudio) {
+      // The Mac App Store sandbox retains Apple's native picker.
+      // Windows no longer calls getDisplayMedia or captures screen frames.
+      if (system && !nativeAudioAvailable) {
         // The display API must still be first on platforms with a picker.
         try {
           draft.systemStream = await navigator.mediaDevices.getDisplayMedia({
