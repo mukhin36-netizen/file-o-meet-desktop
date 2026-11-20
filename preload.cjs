@@ -26,6 +26,22 @@ contextBridge.exposeInMainWorld('fileo', Object.freeze({
   openRecordingSettings: (kind = 'system') =>
     invoke('open-recording-settings', kind === 'microphone' ? 'microphone' : 'system'),
   restartForPermissions: () => invoke('restart-for-permissions'),
+  startSystemAudio: () => invoke('system-audio-start'),
+  stopSystemAudio: () => invoke('system-audio-stop'),
+  onSystemPCM: (handler) => {
+    if(typeof handler!=='function')return () => {};
+    const listener=(_event,pcm) => {
+      if(typeof pcm==='string' && pcm.length<400000)handler(pcm);
+    };
+    ipcRenderer.on('meeting:system-pcm',listener);
+    return () => ipcRenderer.removeListener('meeting:system-pcm',listener);
+  },
+  onSystemAudioLost: (handler) => {
+    if(typeof handler!=='function')return () => {};
+    const listener=() => handler();
+    ipcRenderer.on('meeting:system-audio-lost',listener);
+    return () => ipcRenderer.removeListener('meeting:system-audio-lost',listener);
+  },
   onUpdate: (handler) => {
     if (typeof handler !== 'function') return () => {};
     const callback = (_event, info) => handler(info);
