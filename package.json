@@ -1,7 +1,7 @@
 {
   "name": "file-o-meeting",
   "productName": "FILE-O Meeting",
-  "version": "0.6.2",
+  "version": "0.6.3",
   "description": "Приложение для записи системного звука видеовстреч и транскрибации в FILE-O",
   "author": "FILE-O",
   "private": true,
