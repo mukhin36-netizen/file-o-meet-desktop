@@ -11,7 +11,7 @@ const js = fs.readFileSync(path.join(root, 'renderer.js'), 'utf8');
 const tick = async () => {
   for (let i = 0; i < 12; i++) await new Promise(resolve => setImmediate(resolve));
 };
-function build({ noSystemAudio = false } = {}) {
+function build({ noSystemAudio = false, denyDisplay = false, denyMicrophone = false } = {}) {
   const dom = new JSDOM(html, {
     url: 'file:///tmp/fileo-test/index.html',
     runScripts: 'outside-only'
@@ -54,11 +54,12 @@ function build({ noSystemAudio = false } = {}) {
       stop() { this.readyState = 'ended'; this.handlers.forEach(cb => cb()); }
     };
   }
-  const sysAudio = noSystemAudio ? [] : [track()];
+  let sysAudio = noSystemAudio ? [] : [track()];
   const sysVideo = [track()];
   w.navigator.mediaDevices = {
     async getDisplayMedia() {
       calls.push('display');
+      if (denyDisplay) throw new w.DOMException('Permission declined','NotAllowedError');
       return {
         getAudioTracks: () => sysAudio,
         getTracks: () => [...sysAudio, ...sysVideo]
@@ -93,7 +94,16 @@ function build({ noSystemAudio = false } = {}) {
     async stop() { calls.push('server-finish'); return { ok: true }; },
     async highlight() { calls.push('mark'); return { active: true }; },
     async open(url) { calls.push('open:'+url); },
-    async microphonePermission() { return true; },
+    platform: 'darwin',
+    async microphonePermission() { return !denyMicrophone; },
+    async openRecordingSettings(kind) {
+      calls.push('open-settings:' + kind);
+      return { opened: true };
+    },
+    async restartForPermissions() {
+      calls.push('restart-for-permissions');
+      return { restarting: true };
+    },
     async pair(code) { calls.push('pair:' + code); return { email:'user@example.test' }; },
     async disconnect() { calls.push('disconnect'); return { ok:true }; },
     onUpdate(callback) { updates = callback;return () => {}; },
@@ -102,6 +112,7 @@ function build({ noSystemAudio = false } = {}) {
   Object.defineProperty(w, 'fileo', { value: mock });
   w.eval(js);
   return { w, doc: w.document, sent, calls,
+    allowSystemAudio() { sysAudio = [track()]; },
     update: message => updates(message),
     stopRequest: () => stopRequest(),
     close() { w.close(); } };
@@ -212,4 +223,91 @@ test('opening cabinet uses FILE-O HTTPS and no embedded remote window', async ()
     await tick();
     assert.ok(f.calls.some(x => x.includes('https://file-o.com/account?section=telemost')));
   } finally { f.close(); }
+});
+
+test('macOS dead system-audio track opens privacy settings and never creates empty meeting', async () => {
+  const f=build({noSystemAudio:true});
+  try {
+    await tick();
+    f.doc.getElementById('microphone').checked=false;
+    f.doc.getElementById('consent').checked=true;
+    f.doc.getElementById('consent').dispatchEvent(new f.w.Event('change'));
+    f.doc.getElementById('start').click();await tick();
+    assert.equal(f.calls.includes('server-start'),false);
+    assert.equal(f.doc.getElementById('audioPermissionPanel').hidden,false);
+    assert.match(f.doc.getElementById('audioPermissionTitle').textContent,/компьютера/);
+    assert.ok(f.calls.includes('open-settings:system'));
+    assert.match(f.doc.getElementById('audioPermissionStatus').textContent,/Настройки macOS открыты/);
+  } finally {f.close();}
+});
+test('denied native picker shows a help button but does not force settings on cancellation',async()=>{
+  const f=build({denyDisplay:true});
+  try {
+    await tick();
+    f.doc.getElementById('microphone').checked=false;
+    f.doc.getElementById('consent').checked=true;
+    f.doc.getElementById('consent').dispatchEvent(new f.w.Event('change'));
+    f.doc.getElementById('start').click();await tick();
+    assert.equal(f.calls.includes('server-start'),false);
+    assert.equal(f.doc.getElementById('audioPermissionPanel').hidden,false);
+    assert.equal(f.calls.includes('open-settings:system'),false);
+    f.doc.getElementById('openAudioSettings').click();await tick();
+    assert.equal(f.calls.filter(x=>x==='open-settings:system').length,1);
+  } finally {f.close();}
+});
+test('macOS microphone denial directs to microphone settings, not screen settings',async()=>{
+  const f=build({denyMicrophone:true});
+  try {
+    await tick();
+    f.doc.getElementById('systemSound').checked=false;
+    f.doc.getElementById('microphone').checked=true;
+    f.doc.getElementById('consent').checked=true;
+    f.doc.getElementById('consent').dispatchEvent(new f.w.Event('change'));
+    f.doc.getElementById('start').click();await tick();
+    assert.equal(f.calls.includes('server-start'),false);
+    assert.equal(f.doc.getElementById('audioPermissionPanel').hidden,false);
+    assert.match(f.doc.getElementById('audioPermissionTitle').textContent,/микрофону/);
+    f.doc.getElementById('openAudioSettings').click();await tick();
+    assert.ok(f.calls.includes('open-settings:microphone'));
+  } finally {f.close();}
+});
+test('retry after user grants access starts one real meeting and hides permission help',async()=>{
+  const f=build({noSystemAudio:true});
+  try {
+    await tick();
+    f.doc.getElementById('microphone').checked=false;
+    f.doc.getElementById('consent').checked=true;
+    f.doc.getElementById('consent').dispatchEvent(new f.w.Event('change'));
+    f.doc.getElementById('start').click();await tick();
+    assert.equal(f.doc.getElementById('audioPermissionPanel').hidden,false);
+    f.allowSystemAudio();
+    f.doc.getElementById('retryAudioPermission').click();await tick();
+    assert.equal(f.doc.getElementById('audioPermissionPanel').hidden,true);
+    assert.equal(f.calls.filter(x=>x==='server-start').length,1);
+    f.doc.getElementById('stop').click();await tick();
+  } finally {f.close();}
+});
+test('explicit restart permission button invokes only dedicated bridge',async()=>{
+  const f=build({noSystemAudio:true});
+  try {
+    await tick();
+    f.doc.getElementById('microphone').checked=false;
+    f.doc.getElementById('consent').checked=true;
+    f.doc.getElementById('consent').dispatchEvent(new f.w.Event('change'));
+    f.doc.getElementById('start').click();await tick();
+    f.doc.getElementById('restartAfterPermission').click();await tick();
+    assert.ok(f.calls.includes('restart-for-permissions'));
+  }finally {f.close();}
+});
+test('preload exposes narrow macOS settings capabilities; no arbitrary scheme can be passed',()=>{
+ const preload=fs.readFileSync(path.join(root,'preload.cjs'),'utf8');
+ const main=fs.readFileSync(path.join(root,'main.cjs'),'utf8');
+ assert.match(preload,/openRecordingSettings:/);
+ assert.match(preload,/restartForPermissions:/);
+ assert.match(preload,/kind === 'microphone' \? 'microphone' : 'system'/);
+ assert.match(main,/meeting:open-recording-settings/);
+ assert.match(main,/Privacy_ScreenCapture/);
+ assert.match(main,/Privacy_Microphone/);
+ assert.match(main,/event.sender !== window\?\.webContents/);
+ assert.match(main,/queueState \|\| lastInfo.recording \|\| lastInfo.busy/);
 });
