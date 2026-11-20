@@ -1,7 +1,7 @@
 {
   "name": "file-o-meeting",
   "productName": "FILE-O Meeting",
-  "version": "0.6.4",
+  "version": "0.6.5",
   "description": "Приложение для записи системного звука видеовстреч и транскрибации в FILE-O",
   "author": "FILE-O",
   "private": true,
@@ -10,7 +10,7 @@
   "scripts": {
     "start": "electron .",
     "test": "node --test tests/*.test.cjs",
-    "pack:windows": "electron-packager . FILE-O-Meeting --platform=win32 --arch=x64 --out=dist --overwrite --icon=assets/fileo.ico",
+    "pack:windows": "node pack-windows.cjs",
     "pack:mac-arm": "node pack-mac.cjs arm64",
     "pack:mac-intel": "node pack-mac.cjs x64"
   },
