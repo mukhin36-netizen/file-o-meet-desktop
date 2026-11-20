@@ -15,7 +15,7 @@ const crypto = require('node:crypto');
 const {NativeSystemAudio} = require('./system_audio_capture.cjs');
 
 const HOST = 'https://file-o.com';
-const VERSION = '0.6.4';
+const VERSION = '0.6.5';
 const CHUNK_MAX = 6 * 1024 * 1024;
 const MAX_CAPTURE_MS = 12 * 3600 * 1000;
 const API_TIMEOUT_MS = 30000;
@@ -644,12 +644,16 @@ function setupIPC() {
         !event.sender.getURL().startsWith('file://') || !token) {
       throw Error('Нет доступа к системному звуку.');
     }
-    if (process.platform !== 'darwin' || process.mas === true)
-      throw Error('Нативный захват звука доступен только в версии FILE-O Meet для macOS с сайта.');
+    const supported = process.platform === 'win32' ||
+                      (process.platform === 'darwin' && process.mas !== true);
+    if (!supported)
+      throw Error('Нативная запись системного звука недоступна в этой версии приложения.');
     if (nativeAudio?.proc)
       throw Error('Запись системного звука уже включена.');
+    const binaryName = process.platform === 'win32'
+      ? 'fileo-system-audio.exe' : 'fileo-system-audio';
     nativeAudio = new NativeSystemAudio({
-      binary: path.join(process.resourcesPath,'fileo-system-audio'),
+      binary: path.join(process.resourcesPath,binaryName),
       onPCM: value => {
         if(window&&!window.isDestroyed()) {
           window.webContents.send('meeting:system-pcm',value);
