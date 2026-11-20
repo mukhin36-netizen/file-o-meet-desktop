@@ -162,7 +162,8 @@ test('start, mark, encrypted queue contract and stop in correct order', async ()
     assert.equal(f.doc.getElementById('livePanel').hidden, false);
     assert.equal(f.doc.getElementById('recordIndicator').hidden, false);
     assert.ok(f.calls.indexOf('display') < f.calls.indexOf('server-start'));
-    assert.ok(f.calls.includes('microphone'));
+    assert.equal(f.calls.includes('microphone'),false,
+      'System-audio-only default must never request mic permission.');
     f.doc.getElementById('highlight').click();
     await tick();
     assert.ok(f.calls.includes('mark'));
