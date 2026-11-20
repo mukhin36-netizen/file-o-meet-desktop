@@ -6,7 +6,7 @@
          IgnorableNamespaces="uap uap10 rescap">
   <Identity Name="MR.FIXDEV.FILE-OMEET"
             Publisher="CN=D27AA549-E324-46BF-AD21-D92FD054E9E8"
-            Version="0.6.2.0"
+            Version="0.6.5.0"
             ProcessorArchitecture="x64" />
   <Properties>
     <DisplayName>FILE-O Meet</DisplayName>
