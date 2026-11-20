@@ -11,6 +11,7 @@ test('Mac App Store uses the dedicated MAS Electron platform and Bundle ID', () 
   assert.match(source, /arch = 'universal'/);
   assert.match(source, /appBundleId: 'com\.fileo\.meeting'/);
   assert.match(source, /appVersion: '1\.0'/);
+  assert.match(source, /buildVersion: '2'/);
   assert.match(source, /UNSIGNED_QA_ONLY/);
   assert.match(source, /provisioningProfile: process\.env\.FILEO_MAS_PROFILE/);
 });
