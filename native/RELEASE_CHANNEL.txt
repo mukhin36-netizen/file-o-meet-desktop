@@ -1,0 +1,4 @@
+FILE-O Meet 0.6.4
+macOS Developer ID signed and notarized release candidate
+System audio: native Core Audio process tap (all output), no window picker
+Test the TCC first-use prompt on a physical Mac before changing public downloads.
