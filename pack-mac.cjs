@@ -1,11 +1,15 @@
 'use strict';
 const { packager } = require('@electron/packager');
 const path = require('node:path');
+const fs = require('node:fs');
 
 const arch = process.argv[2] || 'arm64';
 if (!['arm64', 'x64'].includes(arch)) throw Error('Unexpected Mac architecture');
 
 const release = process.env.FILEO_MAC_DISTRIBUTE === '1';
+if(!fs.existsSync(path.join(__dirname,'native','bin','fileo-system-audio'))){
+  throw Error('Build native system audio helper before packaging macOS.');
+}
 const config = {
   dir: __dirname,
   name: 'FILE-O-Meeting',
@@ -16,10 +20,16 @@ const config = {
   icon: path.join(__dirname, 'assets', 'fileo.icns'),
   asar: true,
   prune: true,
+  // A dedicated signed Core Audio tap is needed to record all system sound
+  // on macOS without showing Apple's screen/window picker.
+  extraResource: [
+    path.join(__dirname,'native','bin','fileo-system-audio'),
+    path.join(__dirname,'native','THIRD_PARTY_AUDIO.md')
+  ],
   appBundleId: 'com.fileo.meeting',
   appCategoryType: 'public.app-category.productivity',
   extendInfo: {
-    CFBundleDisplayName: 'FILE-O Meeting',
+    CFBundleDisplayName: 'FILE-O Meet',
     NSMicrophoneUsageDescription:
       'FILE-O Meeting использует микрофон только после вашего нажатия «Начать запись», чтобы расшифровать собственную речь.',
     NSAudioCaptureUsageDescription:
